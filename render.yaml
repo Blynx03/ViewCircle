@@ -3,10 +3,12 @@ services:
     name: viewcircle-api
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build -w backend
+    buildCommand: npm ci --include=dev && npm run build -w backend
     startCommand: npm run start -w backend
     healthCheckPath: /api/health
     envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
