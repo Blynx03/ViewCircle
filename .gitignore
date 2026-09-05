@@ -8,3 +8,5 @@ test-results/
 *.log
 *.tsbuildinfo
 .DS_Store
+/backend/.env
+/frontend/.env
