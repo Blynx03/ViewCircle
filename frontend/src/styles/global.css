@@ -50,3 +50,17 @@ h1,h2 { font-family:Manrope,sans-serif; letter-spacing:-.04em; }
 .center-card,.ended-page { min-height:calc(100dvh - 100px); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; }.center-card h1 { max-width:500px; }.center-card p { color:var(--muted); }.ended-page { min-height:100dvh; background:radial-gradient(circle at top,#25215b,transparent 45%),var(--bg); }.ended-page .center-card { min-height:auto; }
 @media (orientation:landscape) and (max-height:600px){.live-page{grid-template-columns:1fr 116px;grid-template-rows:auto 1fr}.live-header{grid-column:1/3}.controls-bar{grid-column:2;grid-row:2;grid-template-columns:1fr;overflow:auto}.video-stage{grid-column:1;grid-row:2}.guest-controls{grid-template-columns:1fr}.preview-frame{aspect-ratio:16/9;max-height:54dvh}.setup-page{max-width:850px}.setup-page h1,.setup-page>p{display:inline-block;margin-right:10px}}
 @media (min-width:800px){.controls-bar{grid-template-columns:repeat(9,minmax(72px,100px));justify-content:center}.guest-controls{grid-template-columns:repeat(6,minmax(80px,110px))}.bottom-sheet{max-width:520px;margin:auto;border-radius:26px 26px 0 0}}
+
+/* The Guest's selected mode controls layout, independently of physical rotation. */
+.guest-live.view-portrait { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr) auto; }
+.guest-live.view-portrait .live-header { grid-column:1; }
+.guest-live.view-portrait .video-stage { grid-column:1; grid-row:2; }
+.guest-live.view-portrait .guest-controls { grid-column:1; grid-row:3; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); max-height:35dvh; overflow:auto; }
+.guest-live.view-landscape { grid-template-columns:minmax(0,1fr) 116px; grid-template-rows:auto minmax(0,1fr); }
+.guest-live.view-landscape .live-header { grid-column:1/3; }
+.guest-live.view-landscape .video-stage { grid-column:1; grid-row:2; }
+.guest-live.view-landscape .guest-controls { grid-column:2; grid-row:2; grid-template-columns:1fr; overflow:auto; }
+.lifecycle-message { position:absolute; bottom:0; left:8px; right:8px; padding:8px; background:#0b1020e6; text-align:center; font-size:.85rem; }
+.orientation-control { display:flex; gap:4px; }
+.orientation-control .control { flex:1; }
+.view-landscape .orientation-control { flex-direction:column; }

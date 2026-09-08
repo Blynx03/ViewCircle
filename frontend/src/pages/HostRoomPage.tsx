@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
 import { PermissionHelp, type MediaPermissionKind } from '../components/PermissionHelp';
 import { ControlButton, OrientationControl } from '../components/SessionControls';
-import { FriendlyError } from '../components/StatusViews';
+import { FriendlyError, SessionEnded } from '../components/StatusViews';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useLiveRoom } from '../hooks/useLiveRoom';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -27,8 +27,9 @@ export function HostRoomPage() {
   const orientation = useOrientation(); const fullscreen = useFullscreen(); const online = useNetworkStatus();
   const cameraPermission = usePermissionState('camera'); const microphonePermission = usePermissionState('microphone');
   const releaseOrientation = orientation.release;
-  const live = useLiveRoom(credentials, tracks, facingMode); useWakeLock(Boolean(credentials));
+  const live = useLiveRoom(credentials, tracks, facingMode, roomCode); useWakeLock(Boolean(credentials) && !live.sessionEnded);
   const isLive = Boolean(credentials);
+  useEffect(() => { if (live.sessionEnded) releaseOrientation(); }, [live.sessionEnded, releaseOrientation]);
 
   useEffect(() => { void api.getSession(roomCode).then((value) => { setSession(value); setLocked(value.locked); }).catch((reason: Error) => setError(reason.message)); }, [roomCode]);
   useEffect(() => {
@@ -94,6 +95,7 @@ export function HostRoomPage() {
     else await navigator.clipboard.writeText(shareUrl);
   };
 
+  if (live.sessionEnded) return <main className="ended-page"><SessionEnded /></main>;
   if (!session) return <AppLayout><section className="center-card">{error ? <FriendlyError message={error} action="Return home and create another session." /> : <p>Preparing your circle…</p>}</section></AppLayout>;
   if (!isLive) return <AppLayout><section className="setup-page"><div className="room-chip">ROOM <strong>{roomCode}</strong></div><h1>Set up your camera and mic</h1><p>Nothing is broadcasting yet. You control what ViewCircle can use.</p>
     <div className="media-permission-list">
@@ -133,9 +135,11 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, orien
   };
   const toggleCamera = async () => { setMediaError(''); try { await live.toggleCamera(); } catch { setMediaError('Camera could not be changed. Check camera access and try again.'); } };
   const flipCamera = async () => { setMediaError(''); try { await live.flipCamera(); } catch { setMediaError('Another camera is not available. Your current camera remains connected.'); } };
-  return <main className="live-page"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{guests.length + 1} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection}</span></header>
+  return <main className="live-page"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{guests.length + 1} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
     <div className="room-overlay">Room <strong>{roomCode}</strong></div>
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
+      {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
+      {live.mediaMessage && <p className="lifecycle-message" role="status">{live.mediaMessage}</p>}
       {(error || mediaError) && <div className="floating-error">{error || mediaError}</div>}
     </section>
     <nav className="controls-bar" aria-label="Host controls">
