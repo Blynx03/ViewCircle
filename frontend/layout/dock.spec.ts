@@ -37,3 +37,30 @@ for (const [width, height] of [...sizes.flatMap(([w,h]) => [[w,h],[h,w]]), [1440
     }
   });
 }
+for (const [width, height] of [[390,844],[844,390]]) {
+  test(`${width}x${height}: dock fades without changing geometry or adding controls`, async ({ page }) => {
+    await page.setViewportSize({ width: width!, height: height! });
+    await page.clock.install();
+    await page.goto('/layout/index.html?variant=safari');
+    const dock = page.locator('.guest-dock');
+    await expect(dock).toHaveCSS('background-color', 'rgba(11, 16, 32, 0.23)');
+    await expect(dock).toHaveCSS('opacity', '1');
+    await expect(page.getByRole('button')).toHaveCount(5);
+    await expect(page.getByRole('button', { name: /hide controls|show controls|rotate|fullscreen/i })).toHaveCount(0);
+    const geometry = () => page.locator('.video-stage, .guest-dock, .guest-dock button').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON() as Record<string, number>));
+    const before = await geometry();
+    await page.clock.runFor(4800);
+    await expect(dock).toHaveCSS('opacity', '0');
+    await expect(page.getByRole('button')).toHaveCount(0);
+    expect(await geometry()).toEqual(before);
+    await page.locator('.video-stage').click({ position: { x: 80, y: 80 } });
+    await page.clock.runFor(250);
+    await expect(dock).toHaveCSS('opacity', '1');
+    expect(await geometry()).toEqual(before);
+    await expect(page.getByRole('button', { name: 'Leave session' })).toBeVisible();
+    await page.clock.runFor(4000); await expect(dock).toHaveAttribute('aria-hidden', 'false');
+    await page.clock.runFor(600); await expect(dock).toHaveAttribute('aria-hidden', 'true');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(dock).toHaveCSS('transition-duration', '0s');
+  });
+}

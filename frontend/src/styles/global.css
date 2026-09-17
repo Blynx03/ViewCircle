@@ -90,3 +90,8 @@ h1,h2 { font-family:Manrope,sans-serif; letter-spacing:-.04em; }
   .guest-live .tap-audio { inset:40% max(16px,env(safe-area-inset-right)) auto max(16px,env(safe-area-inset-left)); }
   .portrait-tip { display:none; }
 }
+
+/* Fade the existing dock without changing its layout or button styling. */
+.guest-live .guest-dock { background:rgba(11,16,32,.23); opacity:1; transition:opacity 220ms ease; }
+.guest-live .guest-dock-hidden { opacity:0; pointer-events:none; }
+@media (prefers-reduced-motion:reduce) { .guest-live .guest-dock { transition:none; } }

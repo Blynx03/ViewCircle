@@ -18,6 +18,7 @@ export function WatchPage() {
   const live = useLiveRoom(credentials, undefined, 'user', roomCode);
   const pip = usePictureInPicture(live.videoRef, live.hasVideo, live.sessionEnded || live.removed); const online = useNetworkStatus();
   const { iosStandalone } = useBrowserEnvironment();
+  const [restoreControls, setRestoreControls] = useState(0);
   const [safariHelp, setSafariHelp] = useState(false);
   const [drawer, setDrawer] = useState(false); const [micHelp, setMicHelp] = useState(false); const [micBusy, setMicBusy] = useState(false);
   const local = live.participants.find((person) => person.identity === credentials?.identity);
@@ -37,12 +38,12 @@ export function WatchPage() {
   if (live.sessionEnded || live.removed) return <main className="ended-page"><SessionEnded removed={live.removed} /></main>;
   if (!credentials) return null;
   return <main className="live-page guest-live"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{live.participants.length} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
-    <section className="video-stage"><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
+    <section className="video-stage" onClick={() => setRestoreControls(value => value + 1)}><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
       {(pip.message || live.mediaMessage || live.videoPaused) && <p className="lifecycle-message" role="status">{live.videoPaused ? 'Video paused while ViewCircle is in the background' : live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
       <PortraitTip sessionKey={credentials.identity} hasVideo={live.hasVideo} />
     </section>
-    <GuestControls micOn={Boolean(local?.micOn)} micBusy={micBusy} soundOn={live.soundOn}
+    <GuestControls restoreSignal={restoreControls} panelOpen={safariHelp || drawer || micHelp} micOn={Boolean(local?.micOn)} micBusy={micBusy} soundOn={live.soundOn}
       iosStandalone={iosStandalone} pipSupported={pip.supported} pipActive={pip.active} hasVideo={live.hasVideo}
       onMic={() => void mic()} onSound={live.toggleSound}
       onPip={() => void pip.toggle()} onSafari={() => setSafariHelp(true)} onPeople={() => setDrawer(true)}
