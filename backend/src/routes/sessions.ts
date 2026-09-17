@@ -1,22 +1,30 @@
+import { requireAccess } from '../access/routes.js';
+import { accessStore, type AccessIdentity } from '../access/store.js';
 import { Router } from 'express';
+import { TokenVerifier } from 'livekit-server-sdk';
 import rateLimit from 'express-rate-limit';
 import { sessionStore } from '../stores/session-store.js';
-import { SessionService } from '../services/session-service.js';
+import { ServiceError, SessionService } from '../services/session-service.js';
 import { closeRoom, removeParticipant } from '../services/livekit-service.js';
 import { createSessionSchema, joinSessionSchema, lockSchema, participantSchema, roomCodeSchema } from '../validation/session.js';
 import { env } from '../config/env.js';
 
 const router = Router();
 const service = new SessionService(sessionStore);
+const guestVerifier = new TokenVerifier(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET);
 const limiter = (max: number) => rateLimit({ windowMs: 60_000, max, standardHeaders: true, legacyHeaders: false, skip: () => env.NODE_ENV === 'test' });
 const authority = (request: { cookies?: Record<string, unknown> }): string | undefined => {
   const value = request.cookies?.vc_host;
   return typeof value === 'string' ? value : undefined;
 };
 
-router.post('/', limiter(10), async (request, response) => {
+// Demo approval gates creation; existing-room Guest and Host capabilities are checked below.
+router.post('/', requireAccess, limiter(10), async (request, response) => {
   const input = createSessionSchema.parse(request.body);
-  const created = await service.create(input);
+  const access = response.locals.access as AccessIdentity;
+  await accessStore.reserveCreation(access, env.DEMO_MAX_SESSION_CREATIONS_PER_ACCESS);
+  let created;
+  try { created = await service.create(input); } catch (error) { await accessStore.releaseCreation(access); throw error; }
   response.cookie('vc_host', created.authority, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000,
     path: `/api/sessions/${created.session.roomCode}`
@@ -65,7 +73,17 @@ router.post('/:roomCode/leave', limiter(60), async (request, response) => {
   const { roomCode } = roomCodeSchema.parse(request.params);
   const { identity } = participantSchema.parse(request.body);
   const session = await service.requireSession(roomCode);
-  const guest = session.guests.get(identity); if (guest) guest.removed = true;
+  // Reuse the server-issued media credential already held by this Guest. Peer
+  // identities are public in LiveKit; they are selectors, never authorization.
+  const authorization = request.get('Authorization') ?? '';
+  try {
+    if (!authorization.startsWith('Bearer ') || authorization.length > 8192) throw new Error('Invalid credential');
+    const claims = await guestVerifier.verify(authorization.slice(7), 0);
+    if (claims.sub !== identity || !identity.startsWith('guest-') ||
+        claims.video?.room !== roomCode || claims.video.roomJoin !== true ||
+        !session.guests.has(identity)) throw new Error('Wrong participation');
+  } catch { throw new ServiceError('GUEST_UNAUTHORIZED', 'Guest authorization is required.', 403); }
+  await sessionStore.update(roomCode, current => { const guest = current.guests.get(identity); if (guest) guest.removed = true; });
   response.json({ success: true, data: {} });
 });
 

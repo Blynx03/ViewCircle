@@ -8,5 +8,5 @@ export default defineConfig({
     allowedHosts: ['.trycloudflare.com'],
     proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true } }
   },
-  test: { environment: 'jsdom', setupFiles: './src/test/setup.ts', css: true }
+  test: { include: ['src/**/*.test.{ts,tsx}'], environment: 'jsdom', setupFiles: './src/test/setup.ts', css: true }
 });

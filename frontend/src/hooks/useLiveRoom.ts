@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConnectionState as LKConnectionState, LocalAudioTrack, LocalVideoTrack, RemoteParticipant, RemoteTrack, RemoteTrackPublication, Room, RoomEvent, Track, TrackPublication } from 'livekit-client';
+import { isIOSStandalone } from '../utilities/browser-environment';
 import { api } from '../api/client';
 import { isPictureInPicture } from './usePictureInPicture';
 import type { Credentials } from '../types/session';
+
+const installedIOSGuest = (identity: string) => identity.startsWith('guest-') && isIOSStandalone(navigator, window.matchMedia?.('(display-mode: standalone)').matches ?? false);
 
 export interface ParticipantView { identity: string; name: string; micOn: boolean; speaking: boolean }
 const NO_LOCAL_TRACKS: PublishableLocalTrack[] = [];
@@ -56,7 +59,7 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
       const updateMedia = () => {
         if (disposed || terminal || track.isMuted) return;
         const interrupted = native.muted || native.readyState === 'ended';
-        setMediaMessage(interrupted ? 'Camera or microphone interrupted. Return to ViewCircle to recover.' : '');
+        setMediaMessage(interrupted ? (installedIOSGuest(credentials.identity) && track.kind === Track.Kind.Audio ? 'Microphone interrupted. Use the Mic control to reconnect, or continue in Safari for background two-way audio.' : 'Camera or microphone interrupted. Return to ViewCircle to recover.') : '');
         if (track.kind === Track.Kind.Video) setHasVideo(!interrupted);
       };
       for (const event of ['mute', 'unmute', 'ended']) native.addEventListener(event, updateMedia);
@@ -103,7 +106,7 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
           if (disposed) { await room.disconnect(); return; }
           for (const track of retained) {
             if (![...room.localParticipant.trackPublications.values()].some((publication) => publication.track === track)) {
-              if (!track.isMuted && track.mediaStreamTrack.readyState === 'ended') await track.restartTrack(track.kind === Track.Kind.Video ? { facingMode: cameraFacingRef.current } : undefined);
+              if (!track.isMuted && track.mediaStreamTrack.readyState === 'ended' && !(installedIOSGuest(credentials.identity) && track.kind === Track.Kind.Audio)) await track.restartTrack(track.kind === Track.Kind.Video ? { facingMode: cameraFacingRef.current } : undefined);
               if (disposed || terminal) { track.stop(); return; }
               await room.localParticipant.publishTrack(track);
               if (track.kind === Track.Kind.Video && videoRef.current) track.attach(videoRef.current);
@@ -113,7 +116,7 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
         if (room.state !== LKConnectionState.Connected) return;
         for (const publication of room.localParticipant.trackPublications.values()) {
           const track = publication.track;
-          if (!(track instanceof LocalAudioTrack || track instanceof LocalVideoTrack) || track.isMuted) continue;
+          if (!(track instanceof LocalAudioTrack || track instanceof LocalVideoTrack) || track.isMuted || (installedIOSGuest(credentials.identity) && track.kind === Track.Kind.Audio)) continue;
           if (track.mediaStreamTrack.readyState === 'ended' || track.mediaStreamTrack.muted) await track.restartTrack(track.kind === Track.Kind.Video ? { facingMode: cameraFacingRef.current } : undefined);
           if (disposed || terminal) { track.stop(); return; }
         }
@@ -188,7 +191,18 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
 
   const setMic = useCallback(async (enabled: boolean) => {
     const room = roomRef.current; if (!room) return;
+    const manualCapture = installedIOSGuest(room.localParticipant.identity);
+    const existing = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    // Only a deliberate Mic action may reacquire interrupted installed-iOS capture.
+    if (enabled && manualCapture && existing instanceof LocalAudioTrack &&
+      (existing.mediaStreamTrack.readyState === 'ended' || existing.mediaStreamTrack.muted)) await existing.restartTrack();
     await room.localParticipant.setMicrophoneEnabled(enabled, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+    const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    if (enabled && manualCapture && track instanceof LocalAudioTrack) {
+      // Public SDK ownership option: retain this same track, but prevent SDK
+      // visibility/ended/reconnect handlers from automatically requesting capture.
+      await track.replaceTrack(track.mediaStreamTrack, { userProvidedTrack: true });
+    }
     refresh(room);
   }, [refresh]);
   const toggleCamera = useCallback(async () => {

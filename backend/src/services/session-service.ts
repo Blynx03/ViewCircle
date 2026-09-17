@@ -1,3 +1,4 @@
+import { env } from '../config/env.js';
 import { randomUUID } from 'node:crypto';
 import type { CreateSessionInput } from '../validation/session.js';
 import type { PublicSession, Session } from '../types/session.js';
@@ -42,7 +43,14 @@ export class SessionService {
   async requireSession(roomCode: string): Promise<Session> {
     const session = await this.store.find(roomCode);
     if (!session) throw new ServiceError('SESSION_NOT_FOUND', 'This session could not be found.', 404);
+    if (session.status !== 'ENDED' && session.createdAt.getTime() + env.DEMO_MAX_SESSION_DURATION_MINUTES * 60_000 <= Date.now()) session.status = 'EXPIRED';
     return session;
+  }
+
+  private remainingSeconds(session: Session): number {
+    const remaining = Math.floor((session.createdAt.getTime() + env.DEMO_MAX_SESSION_DURATION_MINUTES * 60_000 - Date.now()) / 1000);
+    if (remaining <= 0) throw new ServiceError('SESSION_ENDED', 'This session has ended.', 410);
+    return remaining;
   }
 
   requireHost(session: Session, authority: string | undefined): void {
@@ -55,8 +63,10 @@ export class SessionService {
     this.requireHost(session, authority);
     if (session.status === 'ENDED' || session.status === 'EXPIRED') throw new ServiceError('SESSION_ENDED', 'This session has ended.', 410);
     const identity = `host-${session.id}`;
-    const token = await createMediaToken({ roomCode: session.roomCode, identity, name: session.hostName, role: 'host' });
+    const token = await createMediaToken({ roomCode: session.roomCode, identity, name: session.hostName, role: 'host', ttl: this.remainingSeconds(session) });
     if (session.status !== 'LIVE') await this.store.update(session.roomCode, (current) => {
+      if (['ENDED', 'EXPIRED'].includes(current.status)) throw new ServiceError('SESSION_ENDED', 'This session has ended.', 410);
+      this.remainingSeconds(current);
       current.status = 'LIVE'; current.startedAt ??= new Date();
     });
     return { token, identity };
@@ -77,7 +87,7 @@ export class SessionService {
       }
     });
     if (!accepted) throw new ServiceError('SESSION_FULL', 'This session is full.', 409);
-    const token = await createMediaToken({ roomCode: session.roomCode, identity, name, role: 'guest' });
+    const token = await createMediaToken({ roomCode: session.roomCode, identity, name, role: 'guest', ttl: this.remainingSeconds(session) });
     return { token, identity };
   }
 }

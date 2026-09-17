@@ -20,10 +20,14 @@ export function usePictureInPicture(ref: RefObject<HTMLVideoElement | null>, has
     const video: SafariVideo | null = ref.current;
     const update = () => { setActive(isPictureInPicture(video)); setSupported(supportsPictureInPicture(video)); };
     update();
+    video?.addEventListener('loadedmetadata', update);
+    video?.addEventListener('emptied', update);
     video?.addEventListener('enterpictureinpicture', update);
     video?.addEventListener('leavepictureinpicture', update);
     video?.addEventListener('webkitpresentationmodechanged', update);
     return () => {
+      video?.removeEventListener('loadedmetadata', update);
+      video?.removeEventListener('emptied', update);
       video?.removeEventListener('enterpictureinpicture', update);
       video?.removeEventListener('leavepictureinpicture', update);
       video?.removeEventListener('webkitpresentationmodechanged', update);

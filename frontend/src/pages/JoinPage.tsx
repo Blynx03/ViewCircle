@@ -5,10 +5,11 @@ import { AppLayout } from '../components/AppLayout';
 import { PinInput, PrimaryButton, RoomCodeInput, TextField } from '../components/FormControls';
 import { FriendlyError } from '../components/StatusViews';
 import type { Credentials, PublicSession } from '../types/session';
+import { guestNameFromFragment } from '../utilities/session-link';
 import { normalizeRoomCode } from '../utilities/room-code';
 
 export function JoinPage() {
-  const params = useParams(); const navigate = useNavigate(); const [code, setCode] = useState(normalizeRoomCode(params.roomCode ?? '')); const [name, setName] = useState('');
+  const params = useParams(); const navigate = useNavigate(); const [code, setCode] = useState(normalizeRoomCode(params.roomCode ?? '')); const [name, setName] = useState(() => guestNameFromFragment(window.location.hash));
   const [pin, setPin] = useState(''); const [session, setSession] = useState<PublicSession | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   useEffect(() => { if (code.length === 4) void api.getSession(code).then(setSession).catch(() => setSession(null)); else setSession(null); }, [code]);
   const submit = async (event: FormEvent) => {

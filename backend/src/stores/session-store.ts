@@ -1,3 +1,5 @@
+import { env } from '../config/env.js';
+import { ServiceError } from '../services/session-service.js';
 import type { Session } from '../types/session.js';
 
 export interface SessionStore {
@@ -12,7 +14,10 @@ export class InMemorySessionStore implements SessionStore {
   private readonly queues = new Map<string, Promise<void>>();
 
   create(session: Session): Promise<void> {
+    this.prune();
     if (this.sessions.has(session.roomCode)) return Promise.reject(new Error('ROOM_CODE_COLLISION'));
+    const active = [...this.sessions.values()].filter(item => item.status !== 'ENDED').length;
+    if (active >= env.DEMO_MAX_ACTIVE_SESSIONS) return Promise.reject(new ServiceError('DEMO_SESSION_LIMIT', 'The demo is at its active session limit. Please try later.', 429));
     this.sessions.set(session.roomCode, session);
     return Promise.resolve();
   }
@@ -25,7 +30,8 @@ export class InMemorySessionStore implements SessionStore {
     const previous = this.queues.get(roomCode) ?? Promise.resolve();
     let release = (): void => undefined;
     const current = new Promise<void>((resolve) => { release = resolve; });
-    this.queues.set(roomCode, previous.then(() => current));
+    const queued = previous.then(() => current);
+    this.queues.set(roomCode, queued);
     await previous;
     try {
       const session = this.sessions.get(roomCode);
@@ -33,11 +39,15 @@ export class InMemorySessionStore implements SessionStore {
       return session;
     } finally {
       release();
-      if (this.queues.get(roomCode) === current) this.queues.delete(roomCode);
+      if (this.queues.get(roomCode) === queued) this.queues.delete(roomCode);
     }
   }
 
-  clear(): void { this.sessions.clear(); }
+  private prune(): void {
+    for (const [code, session] of this.sessions) if (session.status === 'ENDED' && session.endedAt && session.endedAt.getTime() < Date.now() - 86400000) this.sessions.delete(code);
+  }
+  all(): Session[] { return [...this.sessions.values()]; }
+  clear(): void { this.sessions.clear(); this.queues.clear(); }
 }
 
 export const sessionStore = new InMemorySessionStore();

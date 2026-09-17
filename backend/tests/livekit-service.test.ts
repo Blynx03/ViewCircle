@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMediaToken } from '../src/services/livekit-service.js';
 
-interface TokenPayload { video?: { canPublishSources?: string[]; canPublish?: boolean; canSubscribe?: boolean; room?: string } }
+interface TokenPayload { exp?: number; nbf?: number; video?: { canPublishSources?: string[]; canPublish?: boolean; canSubscribe?: boolean; room?: string } }
 
 function payload(token: string): TokenPayload {
   const encoded = token.split('.')[1];
@@ -23,4 +23,10 @@ describe('LiveKit media grants', () => {
     expect(sources).toEqual(expect.arrayContaining(['camera', 'microphone']));
     expect(sources).not.toContain('screen_share');
   });
+});
+
+it('bounds media tokens by the requested remaining room lifetime', async () => {
+  const value = payload(await createMediaToken({ roomCode: '7K4P', identity: 'guest-test', name: 'Guest', role: 'guest', ttl: 60 }));
+  expect(value.exp! - Math.floor(Date.now() / 1000)).toBeGreaterThanOrEqual(59);
+  expect(value.exp! - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(60);
 });

@@ -5,12 +5,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
 import { PermissionHelp, type MediaPermissionKind } from '../components/PermissionHelp';
-import { ControlButton, OrientationControl } from '../components/SessionControls';
+import { ControlButton } from '../components/SessionControls';
 import { FriendlyError, SessionEnded } from '../components/StatusViews';
-import { useFullscreen } from '../hooks/useFullscreen';
 import { useLiveRoom } from '../hooks/useLiveRoom';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { useOrientation } from '../hooks/useOrientation';
 import { usePermissionState } from '../hooks/usePermissionState';
 import { useWakeLock } from '../hooks/useWakeLock';
 import type { Credentials, PublicSession } from '../types/session';
@@ -24,12 +22,10 @@ export function HostRoomPage() {
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [drawer, setDrawer] = useState<'share' | 'guests' | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false); const [locked, setLocked] = useState(false); const previewElement = useRef<HTMLVideoElement>(null);
   const previewTrackRef = useRef<LocalVideoTrack | null>(null); const publishedTracksRef = useRef<Array<LocalAudioTrack | LocalVideoTrack>>([]);
-  const orientation = useOrientation(); const fullscreen = useFullscreen(); const online = useNetworkStatus();
+  const online = useNetworkStatus();
   const cameraPermission = usePermissionState('camera'); const microphonePermission = usePermissionState('microphone');
-  const releaseOrientation = orientation.release;
   const live = useLiveRoom(credentials, tracks, facingMode, roomCode); useWakeLock(Boolean(credentials) && !live.sessionEnded);
   const isLive = Boolean(credentials);
-  useEffect(() => { if (live.sessionEnded) releaseOrientation(); }, [live.sessionEnded, releaseOrientation]);
 
   useEffect(() => { void api.getSession(roomCode).then((value) => { setSession(value); setLocked(value.locked); }).catch((reason: Error) => setError(reason.message)); }, [roomCode]);
   useEffect(() => {
@@ -40,7 +36,7 @@ export function HostRoomPage() {
   useEffect(() => { publishedTracksRef.current = tracks; }, [tracks]);
   const microphoneRef = useRef<LocalAudioTrack | null>(null);
   useEffect(() => { microphoneRef.current = microphone; }, [microphone]);
-  useEffect(() => () => { previewTrackRef.current?.stop(); microphoneRef.current?.stop(); publishedTracksRef.current.forEach((track) => track.stop()); releaseOrientation(); }, [releaseOrientation]);
+  useEffect(() => () => { previewTrackRef.current?.stop(); microphoneRef.current?.stop(); publishedTracksRef.current.forEach((track) => track.stop()); }, []);
 
   const enableCamera = async () => {
     setBusyPermission('camera'); setError('');
@@ -86,7 +82,7 @@ export function HostRoomPage() {
   const toggleLock = async () => { const result = await api.lock(roomCode, !locked); setLocked(result.locked); };
   const end = async () => {
     setBusy(true);
-    try { await api.end(roomCode); tracks.forEach((track) => track.stop()); orientation.release(); void navigate('/ended', { replace: true }); }
+    try { await api.end(roomCode); tracks.forEach((track) => track.stop()); void navigate('/ended', { replace: true }); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not end the session.'); setBusy(false); }
   };
   const shareUrl = `${window.location.origin}/join/${roomCode}`;
@@ -109,20 +105,18 @@ export function HostRoomPage() {
     {preview && <div className="preview-frame"><video ref={previewElement} muted playsInline /></div>}
     {preview && cameraCount > 1 && <fieldset className="camera-choice"><legend>Which camera do you want to use?</legend><button type="button" className={`button ${facingMode === 'user' ? 'button-primary' : ''}`} onClick={() => void chooseCamera('user')} disabled={Boolean(busyPermission)}>FRONT CAMERA</button><button type="button" className={`button ${facingMode === 'environment' ? 'button-primary' : ''}`} onClick={() => void chooseCamera('environment')} disabled={Boolean(busyPermission)}>REAR CAMERA</button></fieldset>}
     {error && <FriendlyError message={error} />}
-    <div className="setup-controls"><OrientationControl value={orientation.orientation} choose={(value) => void orientation.choose(value)} /></div>
-    {orientation.message && <p className="hint">{orientation.message}</p>}
     <button className="button button-live" onClick={() => void start()} disabled={busy || !preview}>{busy ? 'STARTING…' : 'START SESSION'}</button>
     {!microphone && preview && <p className="hint">You can start without a microphone and continue sharing your camera.</p>}
     {permissionHelp && <PermissionHelp kind={permissionHelp} busy={busyPermission === permissionHelp} retry={() => void (permissionHelp === 'camera' ? enableCamera() : enableMicrophone())} close={() => setPermissionHelp(null)} />}
   </section></AppLayout>;
 
-  return <LiveHostView roomCode={roomCode} live={live} online={online} locked={locked} drawer={drawer} setDrawer={setDrawer} orientation={orientation} fullscreen={fullscreen} shareUrl={shareUrl} share={share} toggleLock={toggleLock} confirmEnd={confirmEnd} setConfirmEnd={setConfirmEnd} end={end} busy={busy} error={error} />;
+  return <LiveHostView roomCode={roomCode} live={live} online={online} locked={locked} drawer={drawer} setDrawer={setDrawer} shareUrl={shareUrl} share={share} toggleLock={toggleLock} confirmEnd={confirmEnd} setConfirmEnd={setConfirmEnd} end={end} busy={busy} error={error} />;
 }
 
 type LiveHook = ReturnType<typeof useLiveRoom>;
-function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, orientation, fullscreen, shareUrl, share, toggleLock, confirmEnd, setConfirmEnd, end, busy, error }: {
+function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, shareUrl, share, toggleLock, confirmEnd, setConfirmEnd, end, busy, error }: {
   roomCode: string; live: LiveHook; online: boolean; locked: boolean; drawer: 'share' | 'guests' | null; setDrawer: (value: 'share' | 'guests' | null) => void;
-  orientation: ReturnType<typeof useOrientation>; fullscreen: ReturnType<typeof useFullscreen>; shareUrl: string; share: () => Promise<void>; toggleLock: () => Promise<void>; confirmEnd: boolean; setConfirmEnd: (value: boolean) => void; end: () => Promise<void>; busy: boolean; error: string;
+  shareUrl: string; share: () => Promise<void>; toggleLock: () => Promise<void>; confirmEnd: boolean; setConfirmEnd: (value: boolean) => void; end: () => Promise<void>; busy: boolean; error: string;
 }) {
   const guests = useMemo(() => live.participants.filter((person) => person.identity.startsWith('guest-')), [live.participants]);
   const local = live.participants.find((person) => person.identity.startsWith('host-'));
@@ -143,16 +137,14 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, orien
       {(error || mediaError) && <div className="floating-error">{error || mediaError}</div>}
     </section>
     <nav className="controls-bar" aria-label="Host controls">
-      <ControlButton label={micBusy ? 'Requesting…' : local?.micOn ? 'Mic On' : 'Mic Off'} active={Boolean(local?.micOn)} disabled={micBusy} onClick={() => void toggleMic()} />
-      <ControlButton label={live.hasVideo ? 'Camera On' : 'Camera Off'} active={live.hasVideo} onClick={() => void toggleCamera()} />
-      <ControlButton label={live.soundOn ? 'Sound On' : 'Sound Off'} active={live.soundOn} onClick={live.toggleSound} />
-      <ControlButton label="Flip" onClick={() => void flipCamera()} />
-      <OrientationControl value={orientation.orientation} choose={(value) => void orientation.choose(value)} />
-      <ControlButton label="Full Screen" active={fullscreen.active} onClick={() => void fullscreen.toggle()} />
-      <ControlButton label={`Guests ${guests.length}`} onClick={() => setDrawer('guests')} />
-      <ControlButton label="Share" onClick={() => setDrawer('share')} />
-      <ControlButton label={locked ? 'Unlock' : 'Lock'} active={locked} onClick={() => void toggleLock()} />
-      <ControlButton label="End Session" danger onClick={() => setConfirmEnd(true)} />
+      <ControlButton icon="mic" label={micBusy ? 'Requesting…' : local?.micOn ? 'Mic On' : 'Mic Off'} active={Boolean(local?.micOn)} disabled={micBusy} onClick={() => void toggleMic()} />
+      <ControlButton icon="camera" label={live.hasVideo ? 'Camera On' : 'Camera Off'} active={live.hasVideo} onClick={() => void toggleCamera()} />
+      <ControlButton icon="sound" label={live.soundOn ? 'Sound On' : 'Sound Off'} active={live.soundOn} onClick={live.toggleSound} />
+      <ControlButton icon="flip" label="Flip" onClick={() => void flipCamera()} />
+      <ControlButton icon="people" label={`Guests ${guests.length}`} onClick={() => setDrawer('guests')} />
+      <ControlButton icon="share" label="Share" onClick={() => setDrawer('share')} />
+      <ControlButton icon="lock" label={locked ? 'Unlock' : 'Lock'} active={locked} onClick={() => void toggleLock()} />
+      <ControlButton icon="leave" label="End Session" danger onClick={() => setConfirmEnd(true)} />
     </nav>
     {drawer && <div className="sheet-backdrop" onClick={() => setDrawer(null)}><section className="bottom-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" onClick={() => setDrawer(null)}>Close</button>
       {drawer === 'share' ? <><h2>Invite Guests</h2><div className="share-code">{roomCode}</div><QRCodeSVG value={shareUrl} size={150} bgColor="transparent" fgColor="#eef2ff" /><p>PIN is never included in this link.</p><button className="button button-primary" onClick={() => void share()}>SHARE LINK</button></>

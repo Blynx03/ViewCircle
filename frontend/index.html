@@ -7,7 +7,23 @@
     <meta name="description" content="ViewCircle — Share your view. Stay connected." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" id="app-manifest" />
+    <meta name="apple-mobile-web-app-title" content="ViewCircle" id="app-install-title" />
+    <script>
+      // Select before React or manifest fetching starts; never briefly link the
+      // normal manifest on an Owner cold launch. Also handles cached SPA shells.
+      (() => {
+        function selectManifest(pathname) {
+          const owner = /^\/owner\/?$/i.test(pathname);
+          const href = owner ? '/owner-manifest.webmanifest' : '/manifest.webmanifest';
+          const link = document.getElementById('app-manifest');
+          if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+          document.getElementById('app-install-title').content = owner ? 'ViewCircle Owner' : 'ViewCircle';
+        }
+        selectManifest(window.location.pathname);
+        document.addEventListener('viewcircle:manifest-route', (event) => selectManifest(event.detail));
+      })();
+    </script>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/icon-source.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />

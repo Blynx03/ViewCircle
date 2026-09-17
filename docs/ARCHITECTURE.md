@@ -22,6 +22,6 @@ LiveKit provides reconnection and real-time participant/track events. Ending del
 ## Operational limits and risks
 
 - An in-memory session disappears on API restart and cannot coordinate multiple API replicas. That is the deliberate free-tier MVP tradeoff.
-- Browser automation cannot validate actual camera switching, Bluetooth routing, iOS PWA fullscreen, or multi-hour network transitions. Those require the device checklist in the README.
-- Screen orientation lock and fullscreen are best-effort because iOS Safari support is limited.
+- Browser automation cannot validate actual camera switching, Bluetooth routing, physical iOS safe areas, or multi-hour network transitions. Those require the device checklist in the README.
+- No Rotate or Fullscreen controls are exposed. Physical orientation drives Guest landscape overlays; portrait may show a passive tip. Safari handoff is the supported PiP/background two-way audio path.
 - No recording, egress, transcription, chat, screen sharing, or analytics is enabled.

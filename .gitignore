@@ -10,3 +10,7 @@ test-results/
 .DS_Store
 /backend/.env
 /frontend/.env
+
+# Local browser test output
+frontend/test-results/
+frontend/playwright-report/

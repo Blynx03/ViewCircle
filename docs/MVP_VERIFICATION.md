@@ -16,7 +16,7 @@
 
 - Real permission prompts and previously blocked-site recovery on iPhone Safari, iPad Safari, Android Chrome phone, and Android Chrome tablet
 - Host video transport, all-party audio, echo behavior, Bluetooth/wired routes, autoplay recovery, and hardware camera switching
-- Camera Off versus End Session, reconnection across Wi-Fi/cellular changes, background/foreground recovery, and 3+ hour stability
-- PWA installation, safe areas, fullscreen and orientation fallbacks on each target browser
+- Camera Off versus End Session, reconnection across Wi-Fi/cellular changes, background/foreground recovery, and stability through the configured session lifetime
+- PWA installation, safe areas, physical landscape overlays and absence of Rotate/Fullscreen controls on each target browser
 
 Use HTTPS for every physical-device media test. `localhost` is permitted only on the device running the development server.

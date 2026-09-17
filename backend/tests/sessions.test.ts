@@ -1,4 +1,6 @@
-import request from 'supertest';
+import supertest from 'supertest';
+import { memoryAccessStore as accessStore } from '../src/access/store.js';
+import { digest } from '../src/access/routes.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/services/livekit-service.js', () => ({
@@ -12,9 +14,14 @@ import { InMemorySessionStore, sessionStore } from '../src/stores/session-store.
 import { SessionService } from '../src/services/session-service.js';
 import { ROOM_ALPHABET } from '../src/utilities/security.js';
 
+const request = Object.assign(() => supertest.agent(app).set('X-ViewCircle-Request', '1'), { agent: (_app: unknown) => { void _app; return supertest.agent(app).set('Cookie', 'vc_visitor=session-tests').set('X-ViewCircle-Request', '1'); } });
+
 const create = (agent = request.agent(app), body: Record<string, unknown> = { hostName: 'Avery' }) => agent.post('/api/sessions').send(body);
 
-beforeEach(() => sessionStore.clear());
+beforeEach(() => {
+  sessionStore.clear(); accessStore.clear();
+  accessStore.requests.set('test', { id: 'test', name: 'Test', status: 'approved', createdAt: Date.now(), expiresAt: Date.now() + 3600000, browserHash: digest('session-tests'), creations: 0 });
+});
 
 describe('session API', () => {
   it('creates a session with a human-friendly four-character code', async () => {
@@ -36,36 +43,36 @@ describe('session API', () => {
   it('supports public lookup and private PIN validation', async () => {
     const created = await create(undefined, { hostName: 'Avery', sessionName: 'Walk', pin: '4827' });
     const code = created.body.data.roomCode as string;
-    const publicResult = await request(app).get(`/api/sessions/${code}/public`);
+    const publicResult = await request().get(`/api/sessions/${code}/public`);
     expect(publicResult.body.data).toMatchObject({ sessionName: 'Walk', pinRequired: true });
     expect(JSON.stringify(publicResult.body)).not.toContain('4827');
-    expect((await request(app).post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '1111' })).body.error.code).toBe('WRONG_PIN');
-    expect((await request(app).post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '4827' })).body.data.token).toBe('guest-token');
+    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '1111' })).body.error.code).toBe('WRONG_PIN');
+    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '4827' })).body.data.token).toBe('guest-token');
   });
 
   it('allows ten Guests and atomically rejects the eleventh', async () => {
     const created = await create(); const code = created.body.data.roomCode as string;
-    const results = await Promise.all(Array.from({ length: 11 }, (_, index) => request(app).post(`/api/sessions/${code}/join`).send({ name: `Guest ${index}` })));
+    const results = await Promise.all(Array.from({ length: 11 }, (_, index) => request().post(`/api/sessions/${code}/join`).send({ name: `Guest ${index}` })));
     expect(results.filter((result) => result.status === 200)).toHaveLength(10);
     expect(results.find((result) => result.status === 409)?.body.error.code).toBe('SESSION_FULL');
   });
 
   it('lets only the Host lock, unlock, remove Guests, and end', async () => {
     const agent = request.agent(app); const created = await create(agent); const code = created.body.data.roomCode as string;
-    const guest = await request(app).post(`/api/sessions/${code}/join`).send({ name: 'Sam' });
-    expect((await request(app).post(`/api/sessions/${code}/lock`).send({ locked: true })).body.error.code).toBe('HOST_UNAUTHORIZED');
+    const guest = await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam' });
+    expect((await request().post(`/api/sessions/${code}/lock`).send({ locked: true })).body.error.code).toBe('HOST_UNAUTHORIZED');
     expect((await agent.post(`/api/sessions/${code}/lock`).send({ locked: true })).body.data.locked).toBe(true);
-    expect((await request(app).post(`/api/sessions/${code}/join`).send({ name: 'Lee' })).body.error.code).toBe('SESSION_LOCKED');
+    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Lee' })).body.error.code).toBe('SESSION_LOCKED');
     expect((await agent.post(`/api/sessions/${code}/lock`).send({ locked: false })).body.data.locked).toBe(false);
     expect((await agent.post(`/api/sessions/${code}/remove-participant`).send({ identity: guest.body.data.identity })).status).toBe(200);
-    expect((await request(app).post(`/api/sessions/${code}/participant-status`).send({ identity: guest.body.data.identity })).body.data.removed).toBe(true);
-    expect((await request(app).post(`/api/sessions/${code}/end`)).body.error.code).toBe('HOST_UNAUTHORIZED');
+    expect((await request().post(`/api/sessions/${code}/participant-status`).send({ identity: guest.body.data.identity })).body.data.removed).toBe(true);
+    expect((await request().post(`/api/sessions/${code}/end`)).body.error.code).toBe('HOST_UNAUTHORIZED');
     expect((await agent.post(`/api/sessions/${code}/end`)).status).toBe(200);
-    expect((await request(app).post(`/api/sessions/${code}/join`).send({ name: 'New' })).body.error.code).toBe('SESSION_ENDED');
+    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'New' })).body.error.code).toBe('SESSION_ENDED');
   });
 
   it('rejects invalid input consistently', async () => {
     expect((await create(undefined, { hostName: '' })).body.error.code).toBe('INVALID_INPUT');
-    expect((await request(app).get('/api/sessions/IO10/public')).body.error.code).toBe('INVALID_INPUT');
+    expect((await request().get('/api/sessions/IO10/public')).body.error.code).toBe('INVALID_INPUT');
   });
 });
