@@ -1,8 +1,9 @@
-import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack } from 'livekit-client';
+import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, Track } from 'livekit-client';
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { HostCameraZoom } from '../components/HostCameraZoom';
 import { AppLayout } from '../components/AppLayout';
 import { PermissionHelp, type MediaPermissionKind } from '../components/PermissionHelp';
 import { ControlButton } from '../components/SessionControls';
@@ -26,6 +27,7 @@ export function HostRoomPage() {
   const cameraPermission = usePermissionState('camera'); const microphonePermission = usePermissionState('microphone');
   const live = useLiveRoom(credentials, tracks, facingMode, roomCode); useWakeLock(Boolean(credentials) && !live.sessionEnded);
   const isLive = Boolean(credentials);
+  const getPreviewCamera = useCallback(() => preview && !preview.isMuted ? preview.mediaStreamTrack : null, [preview]);
 
   useEffect(() => { void api.getSession(roomCode).then((value) => { setSession(value); setLocked(value.locked); }).catch((reason: Error) => setError(reason.message)); }, [roomCode]);
   useEffect(() => {
@@ -102,7 +104,7 @@ export function HostRoomPage() {
         {!microphone && <button className="button button-primary" onClick={() => void enableMicrophone()} disabled={Boolean(busyPermission)}>{busyPermission === 'microphone' ? 'ENABLING…' : 'ENABLE MICROPHONE'}</button>}
       </section>
     </div>
-    {preview && <div className="preview-frame"><video ref={previewElement} muted playsInline /></div>}
+    {preview && <div className="preview-frame"><video ref={previewElement} muted playsInline /><HostCameraZoom getTrack={getPreviewCamera} /></div>}
     {preview && cameraCount > 1 && <fieldset className="camera-choice"><legend>Which camera do you want to use?</legend><button type="button" className={`button ${facingMode === 'user' ? 'button-primary' : ''}`} onClick={() => void chooseCamera('user')} disabled={Boolean(busyPermission)}>FRONT CAMERA</button><button type="button" className={`button ${facingMode === 'environment' ? 'button-primary' : ''}`} onClick={() => void chooseCamera('environment')} disabled={Boolean(busyPermission)}>REAR CAMERA</button></fieldset>}
     {error && <FriendlyError message={error} />}
     <button className="button button-live" onClick={() => void start()} disabled={busy || !preview}>{busy ? 'STARTING…' : 'START SESSION'}</button>
@@ -118,6 +120,10 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
   roomCode: string; live: LiveHook; online: boolean; locked: boolean; drawer: 'share' | 'guests' | null; setDrawer: (value: 'share' | 'guests' | null) => void;
   shareUrl: string; share: () => Promise<void>; toggleLock: () => Promise<void>; confirmEnd: boolean; setConfirmEnd: (value: boolean) => void; end: () => Promise<void>; busy: boolean; error: string;
 }) {
+  const getPublishedCamera = useCallback(() => {
+    const track = live.roomRef.current?.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    return track && !track.isMuted ? track.mediaStreamTrack : null;
+  }, [live.roomRef]);
   const guests = useMemo(() => live.participants.filter((person) => person.identity.startsWith('guest-')), [live.participants]);
   const local = live.participants.find((person) => person.identity.startsWith('host-'));
   const [micHelp, setMicHelp] = useState(false); const [micBusy, setMicBusy] = useState(false); const [mediaError, setMediaError] = useState('');
@@ -132,6 +138,7 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
   return <main className="live-page"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{guests.length + 1} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
     <div className="room-overlay">Room <strong>{roomCode}</strong></div>
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
+      {!live.audioBlocked && !live.mediaMessage && !error && !mediaError && <HostCameraZoom getTrack={getPublishedCamera} />}
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
       {live.mediaMessage && <p className="lifecycle-message" role="status">{live.mediaMessage}</p>}
       {(error || mediaError) && <div className="floating-error">{error || mediaError}</div>}

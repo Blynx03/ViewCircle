@@ -43,6 +43,9 @@ for (const [width, height] of [[390,844],[844,390]]) {
     await page.clock.install();
     await page.goto('/layout/index.html?variant=safari');
     const dock = page.locator('.guest-dock');
+    // Freeze wall-clock advancement: assertions and browser scheduling must not
+    // consume the small remaining interval before the 4.5-second deadline.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     await expect(dock).toHaveCSS('background-color', 'rgba(11, 16, 32, 0.23)');
     await expect(dock).toHaveCSS('opacity', '1');
     await expect(page.getByRole('button')).toHaveCount(5);
