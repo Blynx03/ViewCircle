@@ -45,4 +45,26 @@ describe('Host media setup', () => {
     await waitFor(() => expect(screen.getByText('Microphone Ready ✓')).toBeVisible());
     expect(createLocalAudioTrack).toHaveBeenCalledWith(expect.objectContaining({ echoCancellation: true, noiseSuppression: true }));
   });
+  it('blocks session use after camera conflict and allows an explicit camera retry', async () => {
+    vi.mocked(createLocalVideoTrack).mockRejectedValueOnce(new DOMException('device busy', 'NotReadableError'));
+    render(<MemoryRouter initialEntries={['/host/7K4P']}><Routes><Route path="/host/:roomCode" element={<HostRoomPage />} /></Routes></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('button', { name: 'ENABLE CAMERA' }));
+    expect(await screen.findByRole('heading', { name: 'Camera unavailable' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'START SESSION' })).toBeDisabled();
+    expect(screen.queryByText(/Continue Without Camera/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'NOT NOW' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Try Camera Again' }));
+    expect(await screen.findByText('Camera Ready ✓')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'START SESSION' })).toBeEnabled();
+  });
+  it('shares a Guest credential link and copies only the room code', async () => {
+    const share = vi.fn().mockResolvedValue(undefined); const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<MemoryRouter initialEntries={['/host/7K4P']}><Routes><Route path="/host/:roomCode" element={<HostRoomPage />} /></Routes></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Share Guest Link' }));
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: `${window.location.origin}/join?room=7K4P` }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Code' })); expect(writeText).toHaveBeenCalledWith('7K4P');
+  });
+
 });

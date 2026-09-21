@@ -1,3 +1,6 @@
+import { sessionStore } from '../stores/session-store.js';
+import { SessionService } from '../services/session-service.js';
+import { endSession } from '../services/session-expiry.js';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
@@ -92,6 +95,21 @@ router.post('/owner/login', limited(env.OWNER_MAX_FAILED_LOGIN_ATTEMPTS, env.OWN
   ok(response, { expiresAt: Date.now() + maxAge });
 });
 router.use('/owner', requireOwner);
+router.get('/owner/sessions', (_request, response) => {
+  const service = new SessionService(sessionStore);
+  ok(response, { capacity: 2, sessions: sessionStore.all().filter(s => s.status !== 'ENDED').map(s => ({ ...service.publicView(s), pendingRequests: [...s.requests?.values() ?? []].filter(r => r.status === 'pending' && r.expiresAt > Date.now()).length })) });
+});
+router.post('/owner/sessions/end-all', async (_request, response) => {
+  const results = await Promise.allSettled(sessionStore.all().filter(s => s.status !== 'ENDED').map(s => endSession(s, 'The Owner ended the session.')));
+  if (results.some(r => r.status === 'rejected')) throw new ServiceError('CLEANUP_PENDING', 'Some sessions are still closing. Cleanup will retry automatically.', 503);
+  ok(response, {});
+});
+router.post('/owner/sessions/:code/end', async (request, response) => {
+  const session = await sessionStore.find(String(request.params.code));
+  if (session) await endSession(session, 'The Owner ended the session.');
+  ok(response, {});
+});
+router.post('/owner/reset-creations', async (_request, response) => { await accessStore.resetCreations(); ok(response, {}); });
 router.post('/owner/logout', async (request, response) => {
   await accessStore.deleteOwner(digest(cookie(request, 'vc_owner')));
   response.clearCookie('vc_owner', cookieOptions()); ok(response, {});

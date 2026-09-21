@@ -6,6 +6,7 @@ export interface GuestRecord {
   name: string;
   joinedAt: Date;
   removed: boolean;
+  connected?: boolean;
 }
 
 export interface Session {
@@ -14,6 +15,22 @@ export interface Session {
   sessionName?: string;
   hostName: string;
   pinHash?: string;
+  visibility?: 'public' | 'private';
+  accessKey?: string;
+  discoveryId?: string;
+  provisioning?: boolean;
+  hostConnected?: boolean;
+  hostSeen?: boolean;
+  hostMissingSince?: number;
+  cameraMissingSince?: number;
+  cameraReportedLost?: boolean;
+  everJoined?: boolean;
+  aloneSince?: number;
+  keepWaiting?: boolean;
+  pendingExtension?: number;
+  endingReason?: string;
+  requests?: Map<string, { id: string; name: string; secretHash: string; expiresAt: number; status: 'pending' | 'allowed' | 'denied'; credentials?: { token: string; identity: string } }>;
+
   status: SessionStatus;
   locked: boolean;
   createdAt: Date;
@@ -32,4 +49,16 @@ export interface PublicSession {
   locked: boolean;
   guestCount: number;
   capacity: number;
+  discoveryId: string | undefined;
+  visibility: 'public' | 'private';
+  createdAt: string;
+  expiresAt: number;
+  hostConnected: boolean;
+  cameraMissingSince: number | undefined;
+  hostMissingSince: number | undefined;
+  everJoined: boolean;
+  aloneSince: number | undefined;
+  keepWaiting: boolean;
+  pendingExtension: number;
+  endingReason: string | undefined;
 }

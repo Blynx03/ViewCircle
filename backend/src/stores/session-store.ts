@@ -1,4 +1,3 @@
-import { env } from '../config/env.js';
 import { ServiceError } from '../services/session-service.js';
 import type { Session } from '../types/session.js';
 
@@ -17,7 +16,8 @@ export class InMemorySessionStore implements SessionStore {
     this.prune();
     if (this.sessions.has(session.roomCode)) return Promise.reject(new Error('ROOM_CODE_COLLISION'));
     const active = [...this.sessions.values()].filter(item => item.status !== 'ENDED').length;
-    if (active >= env.DEMO_MAX_ACTIVE_SESSIONS) return Promise.reject(new ServiceError('DEMO_SESSION_LIMIT', 'The demo is at its active session limit. Please try later.', 429));
+    if (active >= 2) return Promise.reject(new ServiceError('DEMO_SESSION_LIMIT', 'All available session slots are currently in use.', 429));
+    if (session.accessKey && [...this.sessions.values()].some(item => item.status !== 'ENDED' && item.accessKey === session.accessKey)) return Promise.reject(new ServiceError('ACTIVE_SESSION_EXISTS', 'You already have an active session.', 409));
     this.sessions.set(session.roomCode, session);
     return Promise.resolve();
   }

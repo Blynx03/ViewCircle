@@ -35,7 +35,7 @@ self.addEventListener('push', (event) => {
   const requestId = validRequestId(payload.requestId) ? payload.requestId : null;
   const maxActions = typeof Notification !== 'undefined' && typeof Notification.maxActions === 'number' ? Notification.maxActions : 2;
   event.waitUntil(showRequest({
-    body: typeof payload.body === 'string' ? payload.body : 'A visitor is requesting demo access.',
+    body: typeof payload.body === 'string' ? payload.body : 'A visitor is requesting Host access.',
     icon: '/pwa-192x192.png', badge: '/pwa-64x64.png',
     tag: requestId ? `viewcircle-access-${requestId}` : 'viewcircle-access-request',
     data: { requestId },

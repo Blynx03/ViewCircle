@@ -1,3 +1,4 @@
+import { SessionLifecycle } from '../components/SessionLifecycle';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
@@ -40,6 +41,7 @@ export function WatchPage() {
   if (live.sessionEnded || live.removed) return <main className="ended-page"><SessionEnded removed={live.removed} /></main>;
   if (!credentials) return null;
   return <main className="live-page guest-live"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{live.participants.length} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
+    <SessionLifecycle code={roomCode} />
     <GuestVideoViewport sessionKey={`${roomCode}:${credentials.identity}`} onTap={() => setRestoreControls(value => value + 1)} onInteraction={setZoomInteraction}><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
       {(pip.message || live.mediaMessage || live.videoPaused) && <p className="lifecycle-message" role="status">{live.videoPaused ? 'Video paused while ViewCircle is in the background' : live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}

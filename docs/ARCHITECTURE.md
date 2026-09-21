@@ -3,13 +3,15 @@
 ## System boundaries
 
 - The React PWA owns presentation, device permission prompts, local media controls, and LiveKit room connections.
-- Express owns temporary session metadata, PIN verification, admission, Host authorization, and LiveKit token grants.
+- Express owns temporary session metadata, Public request approval, Private code admission, Host authorization, and LiveKit token grants.
 - LiveKit is the SFU. Camera and microphone bytes only travel through WebRTC and are never handled or stored by the API.
 - `SessionStore` isolates persistence. The MVP uses an atomic in-memory implementation and is intentionally suitable for one API instance. A shared PostgreSQL/Redis adapter is required before horizontal scaling.
 
 ## Security model
 
-The server creates a random 256-bit Host secret and places it in a scoped HTTP-only cookie. Only its SHA-256 digest is retained. Room codes and PINs can never grant Host access. Four-digit PINs are salted and hashed with scrypt, never returned or logged. LiveKit grants allow Hosts to publish camera/microphone and Guests to publish microphone only. API limits apply to creation, lookups, joins, and Host actions. Production uses secure cookies, HTTPS, Helmet, and an exact CORS origin.
+The server creates a random 256-bit Host secret and places it in a scoped HTTP-only cookie. Only its SHA-256 digest is retained. Private room codes and invitation links grant Guest access only; no additional PIN is required. Public rooms require Host approval. LiveKit grants allow Hosts to publish camera/microphone and Guests to publish microphone only. API limits apply to creation, lookups, joins, and Host actions. Production uses secure cookies, HTTPS, Helmet, and an exact CORS origin.
+
+See [production hardening](production-hardening.md) for the authoritative state machine, timeout table, failure semantics, restart recovery, and current validation.
 
 ## Lifecycles
 

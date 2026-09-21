@@ -1,4 +1,6 @@
-# Owner-approved portfolio access
+# Owner-approved Host access
+
+Current behavior and validation: [production hardening](production-hardening.md). Historical validation notes below describe earlier revisions.
 
 Implemented locally. No commit, push, or deployment is part of this change.
 
@@ -8,9 +10,9 @@ Visit `/owner` for the private Owner login and small request dashboard. Credenti
 
 Remember Me off uses a browser-session cookie with a backend expiry of 12 hours. Browser session restore can retain session cookies, but the server deadline still applies. Remember Me on adds a persistent cookie lifetime of 30 days. Both durations are configurable, fixed from login, and not extended by polling. Credentials are never stored in localStorage, URLs, responses, or logs.
 
-Only `/host` (Create Room) sits inside `AccessGate`. The root Host/Guest choice, `/join`, `/join/:roomCode`, `/watch/:roomCode`, and ended page are public. The existing-room `/host/:roomCode` flow uses room-specific Host authority, not demo approval. An unauthorized Host stays on `/host` while requesting access; approval automatically reveals Create Room at that same URL. An unapproved prospective Host supplies a required name (80 characters maximum) and optional email/company (160). No account or password. A random `vc_visitor` HttpOnly cookie binds this browser to its request. The backend stores only its HMAC digest. Pending requests expire after 30 minutes; approval changes that same server-side record to approved for 12 hours **from approval**, with no bearer token exposed to React. Refresh retains the cookie. Denied/expired visitors can request again, subject to cooldown and limits.
+Only `/host` (Create Room) sits inside `AccessGate`. The root Host/Guest choice, `/join`, `/join/:roomCode`, `/watch/:roomCode`, and ended page are public. The existing-room `/host/:roomCode` flow uses room-specific Host authority, not creation approval. An unauthorized Host stays on `/host` while requesting access; approval automatically reveals Create Room at that same URL. An unapproved prospective Host supplies a required name (80 characters maximum) and optional email/company (160). No account or password. A random `vc_visitor` HttpOnly cookie binds this browser to its request. The backend stores only its HMAC digest. Pending requests expire after 30 minutes; approval changes that same server-side record to approved for 12 hours **from approval**, with no bearer token exposed to React. Refresh retains the cookie. Denied/expired visitors can request again, subject to cooldown and limits.
 
-The gate polls `GET /api/access` every five seconds while unauthorized, every minute while authorized, at the authorization deadline, and when returning to the foreground. Requests do not overlap within the polling loop and timers/listeners are cleaned up. Backend creation middleware always checks current demo authorization. The frontend removes the creation form when it observes expiry; existing rooms retain their own Host authority and room lifetime. Owner dashboard polling remains available every five seconds even if push fails.
+The gate polls `GET /api/access` every five seconds while unauthorized, every minute while authorized, at the authorization deadline, and when returning to the foreground. Requests do not overlap within the polling loop and timers/listeners are cleaned up. Backend creation middleware always checks current Host authorization. The frontend removes the creation form when it observes expiry; existing rooms retain their own Host authority and room lifetime. Owner dashboard polling remains available every five seconds even if push fails.
 
 `AccessStore` is an asynchronous persistence interface with a memory implementation. It covers requests, Owner sessions, decisions, subscription registration, and atomic session-creation reservations. A future shared database adapter must implement these operations transactionally. Terminal request history is retained until 24 hours after expiry. No Supabase migration was added.
 
@@ -40,18 +42,18 @@ Use the existing same-origin Vercel `/api` rewrite (or Vite proxy locally). Do n
 | GET /api/owner/push-key | Owner; public VAPID key only |
 | POST /api/owner/push-subscriptions | Owner |
 | DELETE /api/owner/push-subscriptions | Owner; current endpoint |
-| POST /api/sessions | Owner or approved demo access; reserves creator quota |
+| POST /api/sessions | Owner or approved Host access; reserves creator quota |
 | GET /api/sessions/:roomCode/public | Public room preview; room-code validation |
-| POST /api/sessions/:roomCode/join | Public Guest join; room/PIN/lock/capacity/lifetime checks |
+| POST /api/sessions/:roomCode/join | Public Guest join; Private-code/Public-approval/lock/capacity/lifetime checks |
 | POST /api/sessions/:roomCode/leave | Signed, unexpired Guest media token matching room and Guest identity; CSRF protection |
 | POST /api/sessions/:roomCode/participant-status | Existing room/identity status lookup |
 | POST /api/sessions/:roomCode/host-token, lock, remove-participant or end | Existing room-specific Host authority |
 
-Demo authorization applies only to creation. No Guest join reserves or consumes a creation allowance. Every session mutation still passes the unchanged CSRF/origin protections and existing route rate limits.
+Host authorization applies only to creation. No Guest join reserves or consumes a creation allowance. Every session mutation still passes the unchanged CSRF/origin protections and existing route rate limits.
 
 ## Limits
 
-Defaults: two active sessions, 120 minutes from session creation, five successful creations per authorization. Creation slots are reserved before async PIN hashing and refunded if creation fails. The session store atomically enforces active-room capacity. Owner limits apply per Owner login; visitor limits apply per approval. Room capacity is unchanged.
+Policy: two active sessions, 180 minutes from session creation, five successful creations per authorization by default. Creation slots are reserved before LiveKit provisioning and refunded if creation fails. One active room is allowed per authorization. The session store atomically enforces active-room capacity. Owner limits apply per Owner login; visitor limits apply per approval. Room capacity is unchanged.
 
 Tokens cannot be minted for expired sessions and their TTL is capped at the room deadline. An independent five-second backend sweep deletes expired LiveKit rooms, disconnecting existing media, and retries failed deletions. Expired rooms continue occupying capacity until cleanup succeeds. Room deletion depends on LiveKit being reachable; token expiry alone does not disconnect an already-connected participant.
 
@@ -101,8 +103,6 @@ ACCESS_REQUEST_MAX_PER_HOUR=5
 ACCESS_REQUEST_GLOBAL_MAX_PER_HOUR=30
 OWNER_MAX_FAILED_LOGIN_ATTEMPTS=5
 OWNER_LOGIN_LOCKOUT_MINUTES=15
-DEMO_MAX_ACTIVE_SESSIONS=2
-DEMO_MAX_SESSION_DURATION_MINUTES=120
 DEMO_MAX_SESSION_CREATIONS_PER_ACCESS=5
 TRUST_PROXY=
 ```
@@ -200,3 +200,5 @@ Manual acceptance: in a clean Safari profile or installed normal PWA, verify `/`
 ## Final V1 acceptance
 
 The user has accepted physical-device Owner/PWA/push, public Guest joining, Host approval, mobile overlays, Leave/End and Safari background two-way audio. Apple Watch direct approval is out of scope. Earlier test totals above are historical. Guest Leave now uses the existing LiveKit token in an Authorization header, never a URL; the backend verifies signature, issuer, expiry, room and subject before removing that Guest. Owner approval is not needed to leave. Host kick/end remain separate.
+
+Legacy `DEMO_MAX_ACTIVE_SESSIONS` and `DEMO_MAX_SESSION_DURATION_MINUTES` environment values are retained unchanged in deployment files but no longer control product policy (fixed 2 rooms / 180 minutes). Restart reconciliation closes newly tagged orphan rooms; legacy untagged media requires rollout review.

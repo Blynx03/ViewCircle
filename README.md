@@ -46,7 +46,7 @@ npm test
 npm run build
 ```
 
-The automated suite covers room-code constraints/collisions, PINs, capacity, lock/unlock, removal, Host authorization, ending, validation, LiveKit publish-source grants, explicit permission actions, media readiness, front/rear selection, secure-context guidance, core routes/forms, normalization, and control states. Real WebRTC hardware still needs manual testing.
+The automated suite covers room-code constraints/collisions, Private invitation entry, Public approval, capacity, lock/unlock, removal, Host authorization, ending, validation, LiveKit publish-source grants, explicit permission actions, media readiness, front/rear selection, secure-context guidance, core routes/forms, normalization, and control states. Real WebRTC hardware still needs manual testing.
 
 ## Testing with phones and tablets
 
@@ -76,7 +76,7 @@ Layout follows physical orientation. No Rotate or Fullscreen control is exposed 
 
 For multiple API instances or restart-resistant rooms, implement the existing `SessionStore` interface using Supabase PostgreSQL or Redis with transactional capacity admission. Do that before scaling horizontally. LiveKit can later move from Cloud to self-hosting by changing the three backend environment values.
 
-Free tiers can change and LiveKit usage is participant-minute based. The demo defaults to a 120-minute lifetime from room creation and does not enable automatic paid upgrades or resource-heavy recording features.
+Free tiers can change and LiveKit usage is participant-minute based. Sessions have a server-authoritative three-hour lifetime from room creation and does not enable automatic paid upgrades or resource-heavy recording features.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the security and lifecycle design.
 
@@ -101,12 +101,14 @@ A user-run A/B test with a laptop Host and an iPhone Guest verified PiP and two-
 
 The centralized environment check combines `(display-mode: standalone)` with WebKit's `navigator.standalone`, restricted to iPhone/iPad/iPod identities or iPadOS's Mac identity with multi-touch. It does not label normal Safari, desktop Mac web apps, or Android PWAs as installed iOS. References: [Apple standalone detection](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html) and [display-mode detection](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/%40media/display-mode).
 
-Installed iOS Guests see a **Safari** compass action instead of PiP. It opens “Continue in Safari” instructions and **Copy & Continue**. No reliable direct launch/credential handoff is assumed: links can be handled within a web app or Safari View Controller ([Apple's web app behavior](https://developer.apple.com/videos/play/wwdc2023/10120/)). Guests copy the link, Leave, manually open Safari, and paste it to rejoin. The public room code is preserved; the display name is optionally prefilled from a URL fragment. No token, identity, Host credential, or PIN is transferred. The name is visible in the copied link. Safari still uses the normal PIN, capacity, and session-lock checks; a locked session must be unlocked by its Host before rejoining. Copying alone never leaves or changes microphone state. Clipboard denial falls back to a selectable link.
+Installed iOS Guests see a **Safari** compass action instead of PiP. It opens “Continue in Safari” instructions and **Copy & Continue**. No reliable direct launch/credential handoff is assumed: links can be handled within a web app or Safari View Controller ([Apple's web app behavior](https://developer.apple.com/videos/play/wwdc2023/10120/)). Guests copy the link, Leave, manually open Safari, and paste it to rejoin. The public room code is preserved; the display name is optionally prefilled from a URL fragment. No token, identity, Host credential, or PIN is transferred. The name is visible in the copied link. Safari still uses the normal Public approval or Private code, capacity, and session-lock checks; a locked session must be unlocked by its Host before rejoining. Copying alone never leaves or changes microphone state. Clipboard denial falls back to a selectable link.
 
 Host and Guest share 64px-wide, minimum 60px-high icon-above-label controls with responsive wrapping and safe-area padding. Mic/Sound have explicit active states, and destructive Leave/End actions have extra separation. See [the device test plan](docs/ios-safari-and-controls-testing.md).
 
-## Owner-controlled portfolio access
+## Owner-controlled Host access
 
-ViewCircle requires Owner login or temporary Owner-approved demo access to create a session. The Host/Guest landing page and Guest joining are public; Guests still pass normal room, PIN, lock and capacity checks. Existing-room Host controls require their separate room-specific Host authority. Start at `/owner` to manage access requests and enable iPhone Home Screen Web Push. Configure backend-only Owner credentials before production startup; the frontend continues using the existing same-origin `/api` proxy.
+ViewCircle requires Owner login or temporary Owner-approved Host access to create a session. The Host/Guest landing page and Guest joining are public; Guests still pass Private room-code or Public approval, lock and capacity checks. Existing-room Host controls require their separate room-specific Host authority. Start at `/owner` to manage access requests and enable iPhone Home Screen Web Push. Configure backend-only Owner credentials before production startup; the frontend continues using the existing same-origin `/api` proxy.
 
 See [Owner setup, environment variables, key generation, security and limitations](docs/owner-access.md) and the [real-device acceptance procedure](docs/ios-safari-and-controls-testing.md). In-memory authorization and notification registrations reset on backend restart. No normal user accounts are introduced.
+
+See [production hardening and validation](docs/production-hardening.md) for lifecycle rules, operational controls, limitations, and the physical-device acceptance plan.

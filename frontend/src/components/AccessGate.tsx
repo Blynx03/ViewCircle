@@ -33,11 +33,11 @@ export function AccessGate({ children }: { children: ReactNode }) {
       request: previous.request ? { ...previous.request, status: 'expired' } : null })), Math.max(0, access.expiresAt - Date.now()));
     return () => clearTimeout(timer);
   }, [access?.authorized, access?.expiresAt]);
-  // Session creation is available only while backend-controlled demo access is valid.
+  // Session creation is available only while backend-controlled Host access is valid.
   if (access?.authorized && (!access.expiresAt || access.expiresAt > Date.now())) return <>{children}</>;
   const status = access?.request?.status;
   return <main className="app-shell"><section className="form-page"><h1>ViewCircle</h1><p>Share your view. Stay connected.</p><div className="card form-card">
-    <h2>Portfolio Demo</h2>
+    <h2>Host Access</h2>
     {!access ? <p role="status">Checking access…</p> : status === 'pending' ? <div role="status"><h3>Access request sent</h3><p>Waiting for owner approval…</p></div>
       : <>{status === 'denied' ? <p role="status">Access was not approved.</p> : status === 'expired' ? <p role="status">Your access has expired. You can request access again.</p> : <p>Creating a session requires owner approval.</p>}
         <form className="access-form" onSubmit={event => {
@@ -48,6 +48,6 @@ export function AccessGate({ children }: { children: ReactNode }) {
           <label className="field">Email or Company (optional)<input maxLength={160} value={company} onChange={event => setCompany(event.target.value)} /></label>
           <button className="button button-primary" disabled={busy}>{busy ? 'Sending…' : 'Request Access'}</button>
         </form></>}
-    {error && <p role="alert">{error}</p>}<small>Access is provided temporarily for portfolio demonstration.</small>
+    {error && <p role="alert">{error}</p>}<small>Host access is approved by the Owner. Guests can join an available session or use an invitation.</small>
   </div></section></main>;
 }

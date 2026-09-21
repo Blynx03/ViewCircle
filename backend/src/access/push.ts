@@ -8,7 +8,7 @@ export async function notifyOwner(name: string, requestId: string): Promise<void
   await Promise.allSettled((await accessStore.listSubscriptions()).map(async ([id, subscription]) => {
     try {
       await webpush.sendNotification(subscription, JSON.stringify({
-        title: 'ViewCircle Access Request', body: `${name} is requesting demo access.`,
+        title: 'ViewCircle Access Request', body: `${name} is requesting Host access.`,
         requestId, actions: [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }]
       }), { vapidDetails: { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }, TTL: 1800, timeout: 5000 });
     } catch (error) {

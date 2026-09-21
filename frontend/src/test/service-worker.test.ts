@@ -15,7 +15,7 @@ describe('Owner service worker notifications', () => {
     const sw = worker(); let work: Promise<unknown> | undefined;
     sw.handlers.get('push')!({ data: { json: () => { throw new Error('bad'); } }, waitUntil: (value: Promise<unknown>) => { work = value; } });
     await work;
-    expect(sw.showNotification).toHaveBeenCalledWith('ViewCircle Access Request', expect.objectContaining({ body: 'A visitor is requesting demo access.' }));
+    expect(sw.showNotification).toHaveBeenCalledWith('ViewCircle Access Request', expect.objectContaining({ body: 'A visitor is requesting Host access.' }));
   });
   it('focuses an existing Owner window', async () => {
     const focus = vi.fn(); const sw = worker([{ url: 'https://viewcircle.example/owner', focus }]); let work: Promise<unknown> | undefined;
@@ -38,7 +38,7 @@ async function dispatch(sw: ReturnType<typeof worker>, type: string, fields: obj
 describe('protected notification decisions', () => {
   it('offers fixed actions with a record identifier and separate request tags', async () => {
     const sw = worker();
-    await dispatch(sw, 'push', { data: { json: () => ({ requestId: id, body: 'John is requesting demo access.' }) } });
+    await dispatch(sw, 'push', { data: { json: () => ({ requestId: id, body: 'John is requesting Host access.' }) } });
     expect(sw.showNotification).toHaveBeenCalledWith('ViewCircle Access Request', expect.objectContaining({
       actions: [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }], data: { requestId: id }, tag: `viewcircle-access-${id}`
     }));

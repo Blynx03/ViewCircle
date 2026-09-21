@@ -1,12 +1,12 @@
 import request from 'supertest';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AccessToken } from 'livekit-server-sdk';
-vi.mock('../src/services/livekit-service.js', async load => ({ ...await load<typeof import('../src/services/livekit-service.js')>(), closeRoom: vi.fn(), removeParticipant: vi.fn() }));
+vi.mock('../src/services/livekit-service.js', async load => ({ ...await load<typeof import('../src/services/livekit-service.js')>(), closeRoom: vi.fn(), expireRoom: vi.fn(async () => undefined), provisionRoom: vi.fn(async () => undefined), roomPresence: vi.fn(async () => []), removeParticipant: vi.fn() }));
 import { app } from '../src/app.js';
 import { env } from '../src/config/env.js';
 import { sessionStore } from '../src/stores/session-store.js';
 import { SessionService } from '../src/services/session-service.js';
-import { removeParticipant, closeRoom } from '../src/services/livekit-service.js';
+import { removeParticipant, closeRoom, expireRoom } from '../src/services/livekit-service.js';
 const client = () => request(app);
 const service = new SessionService(sessionStore);
 beforeEach(() => { sessionStore.clear(); vi.clearAllMocks(); });
@@ -43,7 +43,7 @@ it('binds self-leave to the signed Guest token, preserves peers/Host/counts, and
   expect(removeParticipant).toHaveBeenCalledWith(session.roomCode, b.identity);
   expect(service.publicView(session).guestCount).toBe(0); expect(session.status).toBe('LIVE');
   expect((await client().post(`/api/sessions/${session.roomCode}/end`).set('X-ViewCircle-Request', '1').set('Cookie', `vc_host=${authority}`)).status).toBe(200);
-  expect(closeRoom).toHaveBeenCalledWith(session.roomCode);
+  expect(expireRoom).toHaveBeenCalledWith(session.roomCode);
 });
 it.each(['wrong-room', 'wrong-key', 'expired', 'host', 'malformed'])('rejects %s credentials without changing participation', async variant => {
   const { session, a } = await setup();

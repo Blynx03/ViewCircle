@@ -211,6 +211,12 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
     await room.localParticipant.setCameraEnabled(next); setHasVideo(next);
     refresh(room);
   }, [refresh]);
+  const retryCamera = useCallback(async () => {
+    const room = roomRef.current; if (!room) return;
+    const track = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    if (track && 'restartTrack' in track) await track.restartTrack({ facingMode: cameraFacingRef.current });
+    await room.localParticipant.setCameraEnabled(true); refresh(room);
+  }, [refresh]);
   const flipCamera = useCallback(async () => {
     const publication = roomRef.current?.localParticipant.getTrackPublication(Track.Source.Camera);
     const track = publication?.track;
@@ -228,5 +234,5 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
     });
   }, []);
   const enableAudio = useCallback(async () => { try { await roomRef.current?.startAudio(); setAudioBlocked(!roomRef.current?.canPlaybackAudio); } catch { setAudioBlocked(true); } }, []);
-  return { sessionEnded, removed, mediaMessage, videoPaused, roomRef, videoRef, audioContainerRef, connection, participants, hasVideo, soundOn, audioBlocked, setMic, toggleCamera, flipCamera, toggleSound, enableAudio };
+  return { sessionEnded, removed, mediaMessage, videoPaused, roomRef, videoRef, audioContainerRef, connection, participants, hasVideo, soundOn, audioBlocked, setMic, toggleCamera, retryCamera, flipCamera, toggleSound, enableAudio };
 }

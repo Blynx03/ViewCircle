@@ -8,6 +8,8 @@ const pin = z.string().regex(/^\d{4}$/);
 export const createSessionSchema = z.object({
   hostName: name,
   sessionName: z.string().trim().max(60).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+  replace: z.boolean().optional(),
   pin: pin.optional()
 });
 export const roomCodeSchema = z.object({ roomCode });

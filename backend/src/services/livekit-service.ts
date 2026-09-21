@@ -14,7 +14,7 @@ export async function createMediaToken(input: {
   const token = new AccessToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {
     identity: input.identity,
     name: input.name,
-    ttl: input.ttl ?? env.DEMO_MAX_SESSION_DURATION_MINUTES * 60,
+    ttl: input.ttl ?? 180 * 60,
     metadata: JSON.stringify({ role: input.role })
   });
   token.addGrant({
@@ -35,7 +35,7 @@ export async function removeParticipant(roomCode: string, identity: string): Pro
 }
 
 export async function closeRoom(roomCode: string): Promise<void> {
-  try { await roomService.deleteRoom(roomCode); } catch { /* The room may not exist until media starts. */ }
+  await expireRoom(roomCode);
 }
 
 // Expiry cleanup must surface transport failures so the sweep can retry.
@@ -43,4 +43,21 @@ export async function expireRoom(roomCode: string): Promise<void> {
   try { await roomService.deleteRoom(roomCode); } catch (error) {
     if ((error as { status?: number; code?: string }).status !== 404 && (error as { code?: string }).code !== 'not_found') throw error;
   }
+}
+
+export async function provisionRoom(roomCode: string): Promise<void> {
+  await roomService.createRoom({ name: roomCode, metadata: JSON.stringify({ application: 'viewcircle', version: 1 }), emptyTimeout: 600, departureTimeout: 180, maxParticipants: 11 });
+}
+export async function roomPresence(roomCode: string) {
+  return roomService.listParticipants(roomCode);
+}
+
+// Only rooms explicitly tagged by this application can be reconciled after a
+// process restart. Never delete unrelated rooms in a shared LiveKit project.
+export async function orphanedRooms(known: Set<string>): Promise<string[]> {
+  const rooms = await roomService.listRooms();
+  return rooms.filter(room => {
+    try { return (JSON.parse(room.metadata) as { application?: string } | null)?.application === 'viewcircle' && !known.has(room.name); }
+    catch { return false; }
+  }).map(room => room.name);
 }

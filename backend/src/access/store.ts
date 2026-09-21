@@ -19,8 +19,9 @@ export interface AccessStore {
   createRequest(item: AccessRequest): Promise<void>;
   listRequests(): Promise<AccessRequest[]>;
   decide(id: string, action: 'approve' | 'deny', visitorTtl: number): Promise<AccessRequest>;
-  reserveCreation(identity: AccessIdentity, max: number): Promise<void>;
-  releaseCreation(identity: AccessIdentity): Promise<void>;
+  reserveCreation(identity: AccessIdentity, max: number): Promise<number>;
+  releaseCreation(identity: AccessIdentity, reservation: number): Promise<void>;
+  resetCreations(): Promise<void>;
   listSubscriptions(): Promise<[string, PushSubscription][]>;
   putSubscription(id: string, subscription: PushSubscription): Promise<void>;
   deleteSubscription(id: string): Promise<void>;
@@ -29,6 +30,7 @@ export interface AccessStore {
 // intentionally finish before yielding so reservations and decisions are atomic.
 /* eslint-disable @typescript-eslint/require-await */
 export class MemoryAccessStore implements AccessStore {
+  private usageGeneration = 0;
   readonly requests = new Map<string, AccessRequest>();
   readonly owners = new Map<string, OwnerSession>();
   readonly subscriptions = new Map<string, PushSubscription>();
@@ -64,13 +66,15 @@ export class MemoryAccessStore implements AccessStore {
   }
   async reserveCreation(identity: AccessIdentity, max: number) {
     const item = this.authorization(identity);
-    if (item.creations >= max) throw new ServiceError('DEMO_CREATION_LIMIT', 'This access has reached its session creation limit.', 429);
-    item.creations += 1;
+    if (item.creations >= max) throw new ServiceError('DEMO_CREATION_LIMIT', 'This Host access has reached its session-creation limit.', 429);
+    item.creations += 1; return this.usageGeneration;
   }
-  async releaseCreation(identity: AccessIdentity) {
+  async releaseCreation(identity: AccessIdentity, reservation: number) {
+    if (reservation !== this.usageGeneration) return;
     const item = identity.kind === 'owner' ? this.owners.get(identity.id) : this.requests.get(identity.id);
     if (item) item.creations = Math.max(0, item.creations - 1);
   }
+  async resetCreations() { this.usageGeneration += 1; for (const item of [...this.owners.values(), ...this.requests.values()]) item.creations = 0; }
   async listSubscriptions(): Promise<[string, PushSubscription][]> { return [...this.subscriptions]; }
   async putSubscription(id: string, subscription: PushSubscription) {
     if (this.subscriptions.size >= 10 && !this.subscriptions.has(id)) throw new ServiceError('DEVICE_LIMIT', 'Remove an old notification device first.', 409);

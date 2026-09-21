@@ -13,7 +13,17 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  createSession: (body: { hostName: string; sessionName?: string; pin?: string }) => request<PublicSession>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
+  cameraState: (code: string, available: boolean) => request(`/sessions/${code}/camera-state`, { method: 'POST', body: JSON.stringify({ available }) }),
+  active: () => request<PublicSession | null>('/sessions/active'),
+  recover: () => request<PublicSession>('/sessions/recover', { method: 'POST' }),
+  available: () => request<Array<{ id: string; label: string; status: string }>>('/sessions/available'),
+  requestJoin: (id: string, name: string, secret: string) => request<{ id: string; roomCode: string }>(`/sessions/available/${id}/requests`, { method: 'POST', body: JSON.stringify({ name, secret }) }),
+  requestStatus: (code: string, id: string, secret: string, cancel = false) => request<{ status: string; credentials?: Credentials }>(`/sessions/${code}/requests/${id}/status`, { method: 'POST', body: JSON.stringify({ secret, cancel }) }),
+  requests: (code: string) => request<Array<{ id: string; name: string }>>(`/sessions/${code}/requests`),
+  decide: (code: string, ids: string[], allow: boolean) => request(`/sessions/${code}/requests/decide`, { method: 'POST', body: JSON.stringify({ ids, allow }) }),
+  keepWaiting: (code: string) => request<PublicSession>(`/sessions/${code}/keep-waiting`, { method: 'POST' }),
+
+  createSession: (body: { hostName: string; sessionName?: string; pin?: string; visibility?: 'public' | 'private'; replace?: boolean }) => request<PublicSession>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
   getSession: (code: string) => request<PublicSession>(`/sessions/${code}/public`),
   join: (code: string, body: { name: string; pin?: string }) => request<Credentials>(`/sessions/${code}/join`, { method: 'POST', body: JSON.stringify(body) }),
   hostToken: (code: string) => request<Credentials>(`/sessions/${code}/host-token`, { method: 'POST' }),

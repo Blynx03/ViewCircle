@@ -15,7 +15,7 @@ test('React navigation and history keep exactly one correct manifest', async ({ 
   await page.route(/^https?:\/\/[^/]+\/api\//, route => {
     const path = new URL(route.request().url()).pathname;
     const data = path === '/api/access' ? { authorized: true, owner: true, request: null, expiresAt: Date.now() + 60000 }
-      : path === '/api/owner/push-key' ? { publicKey: null } : [];
+      : path === '/api/sessions/active' ? null : path === '/api/owner/sessions' ? { capacity: 2, sessions: [] } : path === '/api/owner/push-key' ? { publicKey: null } : [];
     return route.fulfill({ json: { success: true, data } });
   });
   await page.goto('/owner');

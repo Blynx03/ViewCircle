@@ -53,7 +53,7 @@ it('Host End keeps confirmation, ends through the existing API, then returns hom
   expect(end).not.toHaveBeenCalled();
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'END SESSION' }));
   await waitFor(() => expect(end).toHaveBeenCalledWith('TEST'));
-  expect(await screen.findByText('The Host has ended this session.')).toBeVisible();
+  expect(await screen.findByText('This session has ended.')).toBeVisible();
   expect(mock.stop).toHaveBeenCalled();
   await userEvent.click(screen.getByRole('link', { name: 'RETURN HOME' }));
   expect(screen.getByRole('heading', { name: 'Host / Guest' })).toBeVisible();
@@ -131,6 +131,6 @@ it.each(['Guest Leave', 'Host End'])('%s clears the Guest-local video transform'
   }
   await waitFor(() => expect(video.style.transform).toContain('scale(2)'));
   if (action === 'Guest Leave') await userEvent.click(screen.getByRole('button', { name: 'Leave session' }));
-  else { mock.sessionEnded = true; view.rerender(content()); expect(screen.getByText('The Host has ended this session.')).toBeVisible(); }
+  else { mock.sessionEnded = true; view.rerender(content()); expect(screen.getByText('This session has ended.')).toBeVisible(); }
   expect(video.style.transform).toBe(''); expect(view.container.querySelector('video')).toBeNull();
 });

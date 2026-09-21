@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -22,13 +22,12 @@ describe('ViewCircle UI', () => {
     expect(normalizeRoomCode(' 7k-o1p! ')).toBe('7KP');
   });
 
-  it('renders Host creation fields and protects private sessions with four digits', async () => {
+  it('renders Private creation without requiring a PIN', async () => {
     render(<MemoryRouter><CreateHostPage /></MemoryRouter>);
     expect(screen.getByLabelText('Your Name')).toBeRequired();
     await userEvent.click(screen.getByRole('checkbox'));
-    const pin = screen.getByLabelText('4-digit PIN');
-    fireEvent.change(pin, { target: { value: '12ab34' } });
-    expect(pin).toHaveValue('1234');
+    expect(screen.queryByLabelText('4-digit PIN')).not.toBeInTheDocument();
+    expect(screen.getByText(/Only Guests with your room code/)).toBeVisible();
   });
 
   it('prepopulates direct join links and exposes a loading state', async () => {
@@ -42,7 +41,7 @@ describe('ViewCircle UI', () => {
   it('has clear ended and control states', async () => {
     const action = vi.fn();
     const { rerender } = render(<MemoryRouter><SessionEnded /></MemoryRouter>);
-    expect(screen.getByText('The Host has ended this session.')).toBeVisible();
+    expect(screen.getByText('This session has ended.')).toBeVisible();
     rerender(<ControlButton label="Mic Off" onClick={action} />);
     await userEvent.click(screen.getByRole('button', { name: 'Mic Off' }));
     expect(action).toHaveBeenCalledOnce();

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/services/livekit-service.js', () => ({
   createMediaToken: vi.fn(async ({ role }: { role: string }) => `${role}-token`),
   removeParticipant: vi.fn(async () => undefined),
-  closeRoom: vi.fn(async () => undefined)
+  closeRoom: vi.fn(async () => undefined), expireRoom: vi.fn(async () => undefined), roomPresence: vi.fn(async () => []), provisionRoom: vi.fn(async () => undefined)
 }));
 
 import { app } from '../src/app.js';
@@ -40,13 +40,13 @@ describe('session API', () => {
     expect(second.session.roomCode).toBe('EFGH');
   });
 
-  it('supports public lookup and private PIN validation', async () => {
+  it('supports private code entry without an additional PIN', async () => {
     const created = await create(undefined, { hostName: 'Avery', sessionName: 'Walk', pin: '4827' });
     const code = created.body.data.roomCode as string;
     const publicResult = await request().get(`/api/sessions/${code}/public`);
-    expect(publicResult.body.data).toMatchObject({ sessionName: 'Walk', pinRequired: true });
+    expect(publicResult.body.data).toMatchObject({ sessionName: 'Walk', pinRequired: false });
     expect(JSON.stringify(publicResult.body)).not.toContain('4827');
-    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '1111' })).body.error.code).toBe('WRONG_PIN');
+    expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam' })).status).toBe(200);
     expect((await request().post(`/api/sessions/${code}/join`).send({ name: 'Sam', pin: '4827' })).body.data.token).toBe('guest-token');
   });
 

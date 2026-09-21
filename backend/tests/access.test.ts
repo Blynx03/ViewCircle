@@ -1,7 +1,7 @@
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../src/services/livekit-service.js', async load => ({ ...await load<typeof import('../src/services/livekit-service.js')>(), closeRoom: vi.fn(), removeParticipant: vi.fn() }));
+vi.mock('../src/services/livekit-service.js', async load => ({ ...await load<typeof import('../src/services/livekit-service.js')>(), closeRoom: vi.fn(), expireRoom: vi.fn(async () => undefined), provisionRoom: vi.fn(async () => undefined), roomPresence: vi.fn(async () => []), removeParticipant: vi.fn() }));
 vi.mock('web-push', () => ({ default: { sendNotification: vi.fn(async () => ({})) } }));
 import webpush from 'web-push';
 import { app } from '../src/app.js';
@@ -82,7 +82,7 @@ describe('Visitor authorization and requests', () => {
     const created = await admin.post('/api/sessions').send({ hostName: 'Host', pin: '1234' });
     const code = created.body.data.roomCode as string;
     expect((await agent.get(`/api/sessions/${code}/public`)).status).toBe(200);
-    expect((await agent.post(`/api/sessions/${code}/join`).send({ name: 'Guest', pin: '0000' })).body.error.code).toBe('WRONG_PIN');
+    expect((await agent.post(`/api/sessions/${code}/join`).send({ name: 'Guest' })).status).toBe(200);
     accessStore.owners.get(digest('owner-test'))!.creations = 5;
     const joined = await agent.post(`/api/sessions/${code}/join`).send({ name: 'Guest', pin: '1234' });
     expect(joined.status).toBe(200);
@@ -141,8 +141,8 @@ describe('Visitor authorization and requests', () => {
   it('enforces atomic active-room and per-access creation limits', async () => {
     const visitor = approved();
     const results = await Promise.all(Array.from({ length: 3 }, () => visitor.post('/api/sessions').send({ hostName: 'Test', pin: '1234' })));
-    expect(results.filter(result => result.status === 201)).toHaveLength(2);
-    expect(results.find(result => result.status === 429)?.body.error.code).toBe('DEMO_SESSION_LIMIT');
+    expect(results.filter(result => result.status === 201)).toHaveLength(1);
+    expect(results.filter(result => result.status === 409)).toHaveLength(2);
     sessionStore.clear(); accessStore.requests.get('approved')!.creations = 5;
     expect((await visitor.post('/api/sessions').send({ hostName: 'Test' })).body.error.code).toBe('DEMO_CREATION_LIMIT');
   });
@@ -150,13 +150,13 @@ describe('Visitor authorization and requests', () => {
     const admin = owner(); const created = await admin.post('/api/sessions').send({ hostName: 'Test' });
     const code = created.body.data.roomCode as string;
     await admin.post(`/api/sessions/${code}/end`);
-    (await sessionStore.find(code))!.createdAt = new Date(Date.now() - 121 * 60000);
+    (await sessionStore.find(code))!.createdAt = new Date(Date.now() - 181 * 60000);
     expect((await admin.get(`/api/sessions/${code}/public`)).body.data.status).toBe('ENDED');
   });
   it('expires old sessions and refuses new media tokens', async () => {
     const admin = owner(); const created = await admin.post('/api/sessions').send({ hostName: 'Test' });
     const code = created.body.data.roomCode as string;
-    (await sessionStore.find(code))!.createdAt = new Date(Date.now() - 121 * 60000);
+    (await sessionStore.find(code))!.createdAt = new Date(Date.now() - 181 * 60000);
     expect((await admin.post(`/api/sessions/${code}/host-token`)).status).toBe(410);
     expect((await client().post(`/api/sessions/${code}/join`).send({ name: 'Guest' })).status).toBe(410);
   });
@@ -188,7 +188,7 @@ it('push contains only requester name, opaque record ID and fixed action metadat
   const result = await client().post('/api/access-requests').send({ name: 'John', emailOrCompany: 'private@example.com' });
   expect(result.status).toBe(201);
   const payload = JSON.parse(vi.mocked(webpush.sendNotification).mock.calls[0]![1] as string) as Record<string, unknown>;
-  expect(payload).toEqual({ title: 'ViewCircle Access Request', body: 'John is requesting demo access.', requestId: result.body.data.id, actions: [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }] });
+  expect(payload).toEqual({ title: 'ViewCircle Access Request', body: 'John is requesting Host access.', requestId: result.body.data.id, actions: [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }] });
   expect(JSON.stringify(payload)).not.toContain('private@example.com');
 });
 it('worker-style mutations still require Owner cookies, CSRF and pending state', async () => {
