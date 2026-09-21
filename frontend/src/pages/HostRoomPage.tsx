@@ -1,3 +1,4 @@
+import { guestInvitationUrl, copyGuestCode, shareGuestInvitation } from '../utilities/guest-invitation';
 import { HostRoomHeader } from '../components/HostRoomHeader';
 import { SessionLifecycle } from '../components/SessionLifecycle';
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, Track } from 'livekit-client';
@@ -92,15 +93,12 @@ export function HostRoomPage() {
     try { await api.end(roomCode); tracks.forEach((track) => track.stop()); void navigate('/ended', { replace: true }); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not end the session.'); setBusy(false); }
   };
-  const shareUrl = `${window.location.origin}/join?room=${encodeURIComponent(roomCode)}`;
-  const share = async () => {
-    if (navigator.share) await navigator.share({ title: 'Join my ViewCircle', text: `Join my ViewCircle. Room code: ${roomCode}`, url: shareUrl });
-    else await navigator.clipboard.writeText(shareUrl);
-  };
+  const shareUrl = guestInvitationUrl(roomCode);
+  const share = () => shareGuestInvitation(roomCode);
 
   if (live.sessionEnded || serverEnded) return <main className="ended-page"><SessionEnded /></main>;
   if (!session) return <AppLayout><section className="center-card">{error ? <FriendlyError message={error} action="Return home and create another session." /> : <p>Preparing your circle…</p>}</section></AppLayout>;
-  if (!isLive) return <AppLayout><section className="setup-page"><div className="room-chip">ROOM <strong>{roomCode}</strong></div><p>{session.visibility === 'private' ? 'Private Session · ROOM CODE' : 'Public Session · ROOM CODE'}</p><button className="button" onClick={() => { void navigator.clipboard.writeText(roomCode).catch(() => setError('Could not copy. Share the code shown above.')); }}>Copy Code</button><button className="button" onClick={() => { void share().catch((reason: Error) => { if (reason.name !== 'AbortError') setError('Could not share. Copy the room code instead.'); }); }}>Share Guest Link</button><SessionLifecycle code={roomCode} host onEnded={handleServerEnd} /><h1>Set up your camera and mic</h1><p>Nothing is broadcasting yet. You control what ViewCircle can use.</p>
+  if (!isLive) return <AppLayout><section className="setup-page"><p>{session.visibility === 'private' ? 'Private Session' : 'Public Session'} · Set up before inviting Guests</p><SessionLifecycle code={roomCode} host onEnded={handleServerEnd} /><h1>Set up your camera and mic</h1><p>Nothing is broadcasting yet. You control what ViewCircle can use.</p>
     <div className="media-permission-list">
       <section className={`media-permission-card ${preview ? 'is-ready' : ''}`}><div><span className="media-icon" aria-hidden="true">◉</span><span><h2>Camera</h2><p>{preview ? 'Camera Ready ✓' : cameraPermission.state === 'denied' ? 'Camera access is currently blocked.' : 'Camera access is needed to share your view.'}</p></span></div>
         {!preview && <button className="button button-primary" onClick={() => void enableCamera()} disabled={Boolean(busyPermission)}>{busyPermission === 'camera' ? 'ENABLING…' : cameraPermission.state === 'denied' ? 'Try Camera Again' : 'ENABLE CAMERA'}</button>}
@@ -138,6 +136,8 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
     const timer = setInterval(report, 3000); return () => clearInterval(timer);
   }, [getPublishedCamera, roomCode]);
   const guests = useMemo(() => live.participants.filter((person) => person.identity.startsWith('guest-')), [live.participants]);
+  const [hasStarted, setHasStarted] = useState(false);
+  useEffect(() => { if (live.connection === 'connected' && live.hasVideo) setHasStarted(true); }, [live.connection, live.hasVideo]);
   const local = live.participants.find((person) => person.identity.startsWith('host-'));
   const [micHelp, setMicHelp] = useState(false); const [micBusy, setMicBusy] = useState(false); const [mediaError, setMediaError] = useState('');
   const toggleMic = async () => {
@@ -148,7 +148,7 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
   };
   const toggleCamera = async () => { setMediaError(''); try { await live.toggleCamera(); } catch { setMediaError('Camera could not be changed. Check camera access and try again.'); } };
   const flipCamera = async () => { setMediaError(''); try { await live.flipCamera(); } catch { setMediaError('Another camera is not available. Your current camera remains connected.'); } };
-  return <main className="live-page host-live"><HostRoomHeader roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
+  return <main className="live-page host-live"><HostRoomHeader showCode={hasStarted} roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
     <SessionLifecycle code={roomCode} host mediaMessage={error || mediaError || live.mediaMessage} retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
       {!live.audioBlocked && !live.mediaMessage && !error && !mediaError && <HostCameraZoom getTrack={getPublishedCamera} />}
@@ -160,12 +160,12 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
       <ControlButton icon="sound" label={live.soundOn ? 'Sound On' : 'Sound Off'} active={live.soundOn} onClick={live.toggleSound} />
       <ControlButton icon="flip" label="Flip" onClick={() => void flipCamera()} />
       <ControlButton icon="people" label={`Guests ${guests.length}`} onClick={() => setDrawer('guests')} />
-      <ControlButton icon="share" label="Share" onClick={() => setDrawer('share')} />
+      {hasStarted && <ControlButton icon="share" label="Share" onClick={() => setDrawer('share')} />}
       <ControlButton icon="lock" label={locked ? 'Unlock' : 'Lock'} active={locked} onClick={() => void toggleLock()} />
       <ControlButton icon="leave" label="End Session" danger onClick={() => setConfirmEnd(true)} />
     </nav>
     {drawer && <div className="sheet-backdrop" onClick={() => setDrawer(null)}><section className="bottom-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" onClick={() => setDrawer(null)}>Close</button>
-      {drawer === 'share' ? <><h2>Invite Guests</h2><div className="share-code">{roomCode}</div><QRCodeSVG value={shareUrl} size={150} bgColor="transparent" fgColor="#eef2ff" /><p>Share this invitation only with people you want to join.</p><button className="button" onClick={() => { void navigator.clipboard.writeText(roomCode).catch(() => setMediaError('Could not copy. You can share the room code shown above.')); }}>Copy Code</button><button className="button button-primary" onClick={() => { void share().catch((reason: Error) => { if (reason.name !== 'AbortError') setMediaError('Could not share. Copy the room code instead.'); }); }}>Share Guest Link</button></>
+      {drawer === 'share' && hasStarted ? <><h2>Invite Guests</h2><div className="share-code">{roomCode}</div><QRCodeSVG value={shareUrl} size={150} bgColor="transparent" fgColor="#eef2ff" /><p>Share this invitation only with people you want to join.</p><button className="button" onClick={() => { void copyGuestCode(roomCode).catch(() => setMediaError('Could not copy. You can share the room code shown above.')); }}>Copy Code</button><button className="button button-primary" onClick={() => { void share().catch((reason: Error) => { if (reason.name !== 'AbortError') setMediaError('Could not share. Copy the room code instead.'); }); }}>Share Guest Link</button></>
       : <><h2>Guests — {guests.length}</h2><div className="guest-list">{guests.length === 0 && <p>No Guests yet.</p>}{guests.map((guest) => <div key={guest.identity}><span><strong>{guest.name}</strong><small>{guest.speaking ? 'Speaking' : guest.micOn ? 'Mic On' : 'Muted'}</small></span><button onClick={() => void api.remove(roomCode, guest.identity)}>Remove</button></div>)}</div></>}
     </section></div>}
     {confirmEnd && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true"><h2>End this session?</h2><p>Everyone will be disconnected.</p><div><button className="button" onClick={() => setConfirmEnd(false)}>CANCEL</button><button className="button button-danger" disabled={busy} onClick={() => void end()}>{busy ? 'ENDING…' : 'END SESSION'}</button></div></div></div>}

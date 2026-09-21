@@ -7,18 +7,18 @@ import { HostRoomPage } from '../pages/HostRoomPage';
 import { WatchPage } from '../pages/WatchPage';
 import { SessionEnded } from '../components/StatusViews';
 
-const mock = vi.hoisted(() => ({ stop: vi.fn(), attach: vi.fn(), detach: vi.fn(), iosStandalone: false, sessionEnded: false, camera: null as MediaStreamTrack | null }));
+const mock = vi.hoisted(() => ({ stop: vi.fn(), attach: vi.fn(), detach: vi.fn(), iosStandalone: false, sessionEnded: false, connection: 'connected', hasVideo: true, camera: null as MediaStreamTrack | null }));
 vi.mock('livekit-client', async load => ({ ...await load<typeof import('livekit-client')>(), createLocalVideoTrack: vi.fn(async () => mock) }));
 vi.mock('../hooks/useLiveRoom', () => ({ useLiveRoom: () => ({
-  roomRef: { current: { localParticipant: { getTrackPublication: () => mock.camera ? { track: { mediaStreamTrack: mock.camera, isMuted: false } } : undefined } } }, participants: [], videoRef: { current: null }, audioContainerRef: { current: null }, hasVideo: true,
-  connection: 'connected', soundOn: true, sessionEnded: mock.sessionEnded, removed: false,
+  roomRef: { current: { localParticipant: { getTrackPublication: () => mock.camera ? { track: { mediaStreamTrack: mock.camera, isMuted: false } } : undefined } } }, participants: [], videoRef: { current: null }, audioContainerRef: { current: null }, hasVideo: mock.hasVideo,
+  connection: mock.connection, soundOn: true, sessionEnded: mock.sessionEnded, removed: false,
 }) }));
 vi.mock('../hooks/usePictureInPicture', () => ({ usePictureInPicture: () => ({ supported: false }) }));
 vi.mock('../hooks/useBrowserEnvironment', () => ({ useBrowserEnvironment: () => ({ iosStandalone: mock.iosStandalone }) }));
 vi.mock('../hooks/useWakeLock', () => ({ useWakeLock: vi.fn() }));
 
 beforeEach(() => {
-  sessionStorage.clear(); vi.clearAllMocks(); mock.iosStandalone = false; mock.sessionEnded = false; mock.camera = null;
+  sessionStorage.clear(); vi.clearAllMocks(); mock.iosStandalone = false; mock.sessionEnded = false; mock.camera = null; mock.connection = 'connected'; mock.hasVideo = true;
   vi.spyOn(api, 'getSession').mockResolvedValue({ roomCode: 'TEST', locked: false } as Awaited<ReturnType<typeof api.getSession>>);
 });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
@@ -133,4 +133,46 @@ it.each(['Guest Leave', 'Host End'])('%s clears the Guest-local video transform'
   if (action === 'Guest Leave') await userEvent.click(screen.getByRole('button', { name: 'Leave session' }));
   else { mock.sessionEnded = true; view.rerender(content()); expect(screen.getByText('This session has ended.')).toBeVisible(); }
   expect(video.style.transform).toBe(''); expect(view.container.querySelector('video')).toBeNull();
+});
+
+it('shows Private Guest sharing only after connected room verification, with code-only clipboard links', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.open = true; } });
+  vi.mocked(api.getSession).mockResolvedValue({ roomCode: 'TEST', visibility: 'private', status: 'LIVE' } as Awaited<ReturnType<typeof api.getSession>>);
+  sessionStorage.setItem('vc_guest_TEST', JSON.stringify({ identity: 'guest-test', token: 'secret-token', livekitUrl: 'wss://example.test' }));
+  route('/watch/TEST');
+  await userEvent.click(await screen.findByRole('button', { name: 'Room TEST, sharing options' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Copy Code' }));
+  expect(writeText).toHaveBeenLastCalledWith('TEST');
+  await userEvent.click(screen.getByRole('button', { name: 'Share Guest Link' }));
+  expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/join?room=TEST`);
+  const share = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+  await userEvent.click(screen.getByRole('button', { name: 'Share Guest Link' }));
+  expect(share).toHaveBeenCalledWith({ title: 'Join my ViewCircle', url: `${window.location.origin}/join?room=TEST` });
+});
+it('does not offer Private sharing in a Public Guest room', async () => {
+  vi.mocked(api.getSession).mockResolvedValue({ roomCode: 'TEST', visibility: 'public', status: 'LIVE' } as Awaited<ReturnType<typeof api.getSession>>);
+  sessionStorage.setItem('vc_guest_TEST', JSON.stringify({ identity: 'guest-test', token: 'test', livekitUrl: 'wss://example.test' }));
+  route('/watch/TEST');
+  await waitFor(() => expect(api.getSession).toHaveBeenCalled());
+  expect(screen.queryByRole('button', { name: /sharing options/ })).not.toBeInTheDocument();
+});
+it('withholds Host sharing until connected camera publication and preserves it during recovery', async () => {
+  mock.connection = 'connecting'; mock.hasVideo = false;
+  vi.spyOn(api, 'hostToken').mockResolvedValue({ identity: 'host-test', token: 'test', livekitUrl: 'wss://example.test' });
+  const content = () => <MemoryRouter initialEntries={['/host/TEST']}><Routes><Route path="/host/:roomCode" element={<HostRoomPage />} /></Routes></MemoryRouter>;
+  const view = render(content());
+  await userEvent.click(await screen.findByRole('button', { name: 'ENABLE CAMERA' }));
+  expect(screen.queryByRole('button', { name: 'Share Guest Link' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'START SESSION' }));
+  expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  mock.connection = 'connected'; view.rerender(content());
+  expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  mock.hasVideo = true; view.rerender(content());
+  expect(await screen.findByRole('button', { name: 'Share' })).toBeVisible();
+  mock.connection = 'reconnecting'; mock.hasVideo = false; view.rerender(content());
+  expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
 });

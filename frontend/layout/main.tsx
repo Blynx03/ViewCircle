@@ -1,3 +1,4 @@
+import { PrivateGuestShare } from '../src/components/PrivateGuestShare';
 import { HostRoomHeader } from '../src/components/HostRoomHeader';
 import { SessionLifecycle } from '../src/components/SessionLifecycle';
 import { useState } from 'react';
@@ -25,7 +26,7 @@ function Fixture() {
   const [gesture, setGesture] = useState(false);
   const [restore, setRestore] = useState(0);
   return <main className={`live-page ${host && query.has('status') ? 'host-live' : host ? '' : 'guest-live'}`}>
-  {host && query.has('status') ? <><HostRoomHeader roomCode="AB7K" people={11} connection="Connected" connected /><SessionLifecycle code="AB7K" host /></> : <header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>11 people</span><span>Reconnecting…</span></header>}
+  {host && query.has('status') ? <><HostRoomHeader roomCode="AB7K" people={11} connection="Connected" connected /><SessionLifecycle code="AB7K" host /></> : <header className={`live-header ${variant === 'private' ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">11 people</span>{variant === 'private' && <PrivateGuestShare code="AB7K" />}<span className="connection">Reconnecting…</span></header>}
   {host ? <section className="video-stage"><video className="host-video" /><HostCameraZoom getTrack={getCamera} /></section>
     : <GuestVideoViewport sessionKey="layout" onTap={() => setRestore(value => value + 1)} onInteraction={setGesture}><video className="host-video" /></GuestVideoViewport>}
   {host ? <nav className="controls-bar" aria-label="Host controls">

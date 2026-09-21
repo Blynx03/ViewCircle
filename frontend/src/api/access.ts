@@ -5,7 +5,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try { return await apiRequest<T>(path, { ...init, signal: controller.signal }); }
   finally { clearTimeout(timer); }
 }
-export interface AccessStatus { authorized: boolean; owner: boolean; expiresAt?: number; request: { id: string; status: string; expiresAt: number } | null }
+export interface AccessStatus { requestorName?: string; authorized: boolean; owner: boolean; expiresAt?: number; request: { id: string; status: string; expiresAt: number } | null }
 export interface AccessItem { id: string; name: string; emailOrCompany?: string; status: string; createdAt: number; expiresAt: number }
 const post = (body?: unknown): RequestInit => ({ method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) });
 export const accessApi = {

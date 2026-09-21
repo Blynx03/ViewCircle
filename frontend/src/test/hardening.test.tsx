@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AccessGate } from '../components/AccessGate';
 import { api } from '../api/client';
 import { JoinPage } from '../pages/JoinPage';
 import { CreateHostPage } from '../pages/CreateHostPage';
@@ -19,7 +20,7 @@ it('uses the Private invitation query credential while preserving the display-na
   vi.mocked(api.join).mockResolvedValue({ token: 'guest-token', identity: 'guest-a', livekitUrl: 'wss://example.test' });
   render(<MemoryRouter initialEntries={['/join']}><Routes><Route path="/join" element={<JoinPage />} /><Route path="/watch/:code" element={<p>Watching</p>} /></Routes></MemoryRouter>);
   expect(screen.getByLabelText('Room Code')).toHaveValue('AB7K'); expect(screen.getByRole('button', { name: 'JOIN SESSION' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Guest' } }); fireEvent.click(screen.getByRole('button', { name: 'JOIN SESSION' }));
+  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Guest' } }); await waitFor(() => expect(screen.getByRole('button', { name: 'JOIN SESSION' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'JOIN SESSION' }));
   expect(await screen.findByText('Watching')).toBeVisible(); expect(api.join).toHaveBeenCalledWith('AB7K', { name: 'Guest' });
 });
 it('explains expired invitation links', async () => {
@@ -68,4 +69,54 @@ it('offers active-session recovery when an authorized Host reopens the landing p
   expect(await screen.findByText('You already have an active session.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Rejoin Session' }));
   await waitFor(() => expect(api.recover).toHaveBeenCalledOnce()); expect(api.createSession).not.toHaveBeenCalled();
+});
+
+it('enables Private joining when provisioning completes without retyping', async () => {
+  vi.useFakeTimers();
+  vi.mocked(api.getSession).mockResolvedValueOnce({ ...base, provisioning: true, joinable: false }).mockResolvedValue({ ...base, provisioning: false, joinable: true });
+  render(<MemoryRouter initialEntries={['/join?room=AB7K']}><JoinPage /></MemoryRouter>);
+  fireEvent.input(screen.getByLabelText('Your Name'), { target: { value: 'Guest' } });
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.getByText(/Host is preparing/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'JOIN SESSION' })).toBeDisabled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(screen.getByRole('button', { name: 'JOIN SESSION' })).toBeEnabled();
+});
+it('ignores a late Public response after a Private code replaces it', async () => {
+  let resolvePublic!: (value: PublicSession) => void;
+  vi.mocked(api.getSession).mockImplementation(code => code === 'PUB2' ? new Promise(resolve => { resolvePublic = resolve; }) : Promise.resolve(base));
+  vi.mocked(api.join).mockResolvedValue({ token: 'guest-token', identity: 'guest-a', livekitUrl: 'wss://example.test' });
+  render(<MemoryRouter initialEntries={['/join?room=PUB2']}><JoinPage /></MemoryRouter>);
+  fireEvent.change(screen.getByLabelText('Room Code'), { target: { value: 'AB7K' } });
+  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Guest' } });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'JOIN SESSION' })).toBeEnabled());
+  await act(async () => resolvePublic({ ...base, roomCode: 'PUB2', visibility: 'public', discoveryId: 'public-selector' }));
+  fireEvent.click(screen.getByRole('button', { name: 'JOIN SESSION' }));
+  await waitFor(() => expect(api.join).toHaveBeenCalledWith('AB7K', { name: 'Guest' }));
+  expect(api.requestJoin).not.toHaveBeenCalled();
+});
+it('keeps Public code entry on the approval path', async () => {
+  vi.mocked(api.getSession).mockResolvedValue({ ...base, visibility: 'public', discoveryId: 'selector' });
+  vi.mocked(api.requestJoin).mockResolvedValue({ id: 'request', roomCode: 'AB7K' });
+  vi.mocked(api.requestStatus).mockResolvedValue({ status: 'pending' });
+  render(<MemoryRouter initialEntries={['/join?room=AB7K']}><JoinPage /></MemoryRouter>);
+  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Guest' } });
+  const button = await screen.findByRole('button', { name: 'REQUEST TO JOIN' });
+  fireEvent.click(button);
+  expect(await screen.findByText(/Waiting for the Host/)).toBeVisible();
+  expect(api.requestJoin).toHaveBeenCalledWith('selector', 'Guest', expect.any(String));
+  expect(api.join).not.toHaveBeenCalled();
+});
+
+it.each(['public', 'private'] as const)('prefills the approved name and submits an edited %s Host name', async visibility => {
+  vi.mocked(accessApi.status).mockResolvedValue({ owner: false, authorized: true, request: null, requestorName: 'Approved Visitor' });
+  vi.mocked(api.createSession).mockResolvedValue(base);
+  render(<MemoryRouter><AccessGate><CreateHostPage /></AccessGate></MemoryRouter>);
+  const name = await screen.findByLabelText('Your Name');
+  await waitFor(() => expect(name).toHaveValue('Approved Visitor'));
+  fireEvent.change(name, { target: { value: 'Edited Host' } });
+  if (visibility === 'private') fireEvent.click(screen.getByRole('checkbox'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'CREATE SESSION' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'CREATE SESSION' }));
+  await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ hostName: 'Edited Host', visibility }));
 });

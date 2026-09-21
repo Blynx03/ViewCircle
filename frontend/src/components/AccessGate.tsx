@@ -1,3 +1,4 @@
+import { ApprovedHostName } from '../contexts/approved-host-name';
 import { useEffect, useState, type ReactNode } from 'react';
 import { accessApi, type AccessStatus } from '../api/access';
 
@@ -34,7 +35,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [access?.authorized, access?.expiresAt]);
   // Session creation is available only while backend-controlled Host access is valid.
-  if (access?.authorized && (!access.expiresAt || access.expiresAt > Date.now())) return <>{children}</>;
+  if (access?.authorized && (!access.expiresAt || access.expiresAt > Date.now())) return <ApprovedHostName.Provider value={access.requestorName ?? ''}>{children}</ApprovedHostName.Provider>;
   const status = access?.request?.status;
   return <main className="app-shell"><section className="form-page"><h1>ViewCircle</h1><p>Share your view. Stay connected.</p><div className="card form-card">
     <h2>Host Access</h2>

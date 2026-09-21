@@ -41,6 +41,8 @@ export interface Session {
 }
 
 export interface PublicSession {
+  provisioning: boolean;
+  joinable: boolean;
   roomCode: string;
   sessionName?: string;
   hostName: string;

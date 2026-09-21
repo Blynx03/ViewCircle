@@ -30,10 +30,13 @@ export class SessionService {
   }
 
   publicView(session: Session): PublicSession {
+    const guestCount = [...session.guests.values()].filter(guest => !guest.removed && guest.connected !== false).length;
     return {
+      provisioning: Boolean(session.provisioning),
+      joinable: !session.provisioning && !['ENDED', 'EXPIRED'].includes(session.status) && !session.locked && guestCount < 10 && session.createdAt.getTime() + 180 * 60_000 > Date.now(),
       roomCode: session.roomCode, ...(session.sessionName ? { sessionName: session.sessionName } : {}),
       hostName: session.hostName, pinRequired: Boolean(session.pinHash), status: session.status,
-      locked: session.locked, guestCount: [...session.guests.values()].filter((guest) => !guest.removed && guest.connected !== false).length,
+      locked: session.locked, guestCount,
       capacity: 10, discoveryId: session.visibility === 'public' ? session.discoveryId : undefined, visibility: session.visibility ?? 'private', createdAt: session.createdAt.toISOString(), expiresAt: session.createdAt.getTime() + 180 * 60_000, hostConnected: session.hostConnected ?? false, cameraMissingSince: session.cameraMissingSince, hostMissingSince: session.hostMissingSince, everJoined: session.everJoined ?? false, aloneSince: session.aloneSince, keepWaiting: session.keepWaiting ?? false, pendingExtension: session.pendingExtension ?? 0, endingReason: session.endingReason
     };
   }

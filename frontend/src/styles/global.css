@@ -210,3 +210,17 @@ body { min-width: 0; }
 }
 
 .admission-name { min-height: 44px; border: 0; padding: 0; text-align: left; color: inherit; background: transparent; cursor: pointer; }
+
+/* A Private Guest invitation fits the existing header; sharing details are opt-in. */
+.guest-room-invitation { min-height: 44px; flex: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: var(--panel); color: var(--text); font: inherit; cursor: pointer; white-space: nowrap; }
+.guest-room-invitation strong { letter-spacing: .05em; }
+.private-share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.join-name-hint { color: var(--muted); margin: 0; font-size: .9rem; }
+@media (max-width: 600px) {
+  .guest-private-header { gap: 6px; padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right)); }
+  .guest-private-header > strong { font-size: .85rem; }
+  .guest-private-header .guest-people { display: none; }
+  .guest-private-header .connection { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.guest-live .guest-private-header { flex-wrap: nowrap; }
+.guest-live .guest-private-header + .session-lifecycle { top: calc(60px + env(safe-area-inset-top)); }

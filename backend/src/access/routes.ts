@@ -54,6 +54,7 @@ const ok = (response: Response, data: unknown) => response.json({ success: true,
 router.get('/access', async (request, response) => {
   const owner = await ownerSession(request); const visitor = await visitorRequest(request);
   ok(response, { authorized: Boolean(owner || visitor?.status === 'approved'), owner: Boolean(owner),
+    ...(!owner && visitor?.status === 'approved' ? { requestorName: visitor.name } : {}),
     expiresAt: owner?.expiresAt ?? (visitor?.status === 'approved' ? visitor.expiresAt : undefined),
     request: visitor ? { id: visitor.id, status: visitor.status, expiresAt: visitor.expiresAt } : null });
 });

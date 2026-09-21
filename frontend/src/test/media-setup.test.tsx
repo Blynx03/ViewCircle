@@ -57,14 +57,12 @@ describe('Host media setup', () => {
     expect(await screen.findByText('Camera Ready ✓')).toBeVisible();
     expect(screen.getByRole('button', { name: 'START SESSION' })).toBeEnabled();
   });
-  it('shares a Guest credential link and copies only the room code', async () => {
-    const share = vi.fn().mockResolvedValue(undefined); const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  it('does not expose sharing or the room credential before Start Session', async () => {
     render(<MemoryRouter initialEntries={['/host/7K4P']}><Routes><Route path="/host/:roomCode" element={<HostRoomPage />} /></Routes></MemoryRouter>);
-    await userEvent.click(await screen.findByRole('button', { name: 'Share Guest Link' }));
-    expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: `${window.location.origin}/join?room=7K4P` }));
-    await userEvent.click(screen.getByRole('button', { name: 'Copy Code' })); expect(writeText).toHaveBeenCalledWith('7K4P');
+    expect(await screen.findByRole('heading', { name: 'Set up your camera and mic' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Share Guest Link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy Code' })).not.toBeInTheDocument();
+    expect(screen.queryByText('7K4P')).not.toBeInTheDocument();
   });
 
 });

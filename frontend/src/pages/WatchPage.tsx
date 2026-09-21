@@ -1,3 +1,4 @@
+import { PrivateGuestShare } from '../components/PrivateGuestShare';
 import { SessionLifecycle } from '../components/SessionLifecycle';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,6 +21,13 @@ export function WatchPage() {
   const live = useLiveRoom(credentials, undefined, 'user', roomCode);
   const pip = usePictureInPicture(live.videoRef, live.hasVideo, live.sessionEnded || live.removed); const online = useNetworkStatus();
   const { iosStandalone } = useBrowserEnvironment();
+  const [privateRoom, setPrivateRoom] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!credentials || live.connection !== 'connected') return;
+    void api.getSession(roomCode).then(session => { if (active) setPrivateRoom(session.roomCode === roomCode && session.visibility === 'private' && !['ENDED', 'EXPIRED'].includes(session.status) ? roomCode : null); }).catch(() => { if (active) setPrivateRoom(null); });
+    return () => { active = false; };
+  }, [credentials, live.connection, roomCode]);
   const [zoomInteraction, setZoomInteraction] = useState(false);
   const [restoreControls, setRestoreControls] = useState(0);
   const [safariHelp, setSafariHelp] = useState(false);
@@ -40,7 +48,7 @@ export function WatchPage() {
   };
   if (live.sessionEnded || live.removed) return <main className="ended-page"><SessionEnded removed={live.removed} /></main>;
   if (!credentials) return null;
-  return <main className="live-page guest-live"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{live.participants.length} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
+  return <main className="live-page guest-live"><header className={`live-header ${privateRoom === roomCode ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">{live.participants.length} people</span>{privateRoom === roomCode && <PrivateGuestShare key={roomCode} code={roomCode} />}<span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
     <SessionLifecycle code={roomCode} />
     <GuestVideoViewport sessionKey={`${roomCode}:${credentials.identity}`} onTap={() => setRestoreControls(value => value + 1)} onInteraction={setZoomInteraction}><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
       {(pip.message || live.mediaMessage || live.videoPaused) && <p className="lifecycle-message" role="status">{live.videoPaused ? 'Video paused while ViewCircle is in the background' : live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
