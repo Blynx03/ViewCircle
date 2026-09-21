@@ -40,7 +40,6 @@ h1,h2 { font-family:Manrope,sans-serif; letter-spacing:-.04em; }
 .media-permission-list { display:grid; gap:12px; margin:24px 0 18px; }.media-permission-card { padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--panel); display:grid; gap:16px; }.media-permission-card>div { display:flex; align-items:center; gap:14px; }.media-permission-card h2 { margin:0 0 3px; font-size:1.05rem; }.media-permission-card p { margin:0; color:var(--muted); font-size:.9rem; }.media-permission-card.is-ready { border-color:rgba(70,215,182,.45); background:rgba(70,215,182,.08); }.media-permission-card.is-ready p { color:var(--accent-2); font-weight:700; }.media-icon { display:grid; place-items:center; flex:0 0 42px; height:42px; border-radius:13px; background:var(--panel-2); color:var(--accent-2); }.camera-choice { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:0 0 18px; padding:14px; border:1px solid var(--line); border-radius:16px; }.camera-choice legend { padding:0 8px; font-weight:700; }.setup-page>.button { width:100%; }.hint { text-align:center; color:var(--muted); font-size:.85rem; }
 
 .live-page { height:100dvh; background:#03050a; display:grid; grid-template-rows:auto 1fr auto; padding-top:env(safe-area-inset-top); overflow:hidden; position:relative; }.live-header { min-height:52px; padding:0 max(14px,env(safe-area-inset-right)) 0 max(14px,env(safe-area-inset-left)); display:flex; align-items:center; gap:10px; background:#0b1020; font-size:.78rem; }.live-header>strong { font:800 1rem Manrope,sans-serif; margin-right:auto; }.live-badge { padding:4px 7px; border-radius:6px; background:var(--danger); color:white; font-size:.65rem; font-weight:800; }.connection { color:#ffb2b9; text-transform:capitalize; }.connection.ok { color:var(--accent-2); }
-.room-overlay { position:absolute; z-index:2; top:calc(62px + env(safe-area-inset-top)); left:14px; background:rgba(3,5,10,.72); backdrop-filter:blur(10px); border-radius:8px; padding:7px 10px; font-size:1.2rem; }.room-overlay strong { letter-spacing:.15em; }
 .video-stage { min-height:0; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }.host-video { width:100%; height:100%; object-fit:contain; background:#03050a; }.mirror-local { transform:scaleX(-1); }.audio-container { position:absolute; width:1px; height:1px; overflow:hidden; }
 .controls-bar { padding:10px max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px; background:#0b1020; }.floating-error { position:absolute; bottom:14px; left:14px; right:14px; background:rgba(93,23,31,.92); border:1px solid var(--danger); padding:12px; border-radius:12px; text-align:center; }.tap-audio { position:absolute; inset:auto 16px 20px; min-height:52px; border:0; border-radius:14px; background:var(--accent-2); color:#06140f; font-weight:800; }
 .sheet-backdrop,.modal-backdrop { position:fixed; z-index:20; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:flex-end; }.bottom-sheet { width:100%; max-height:78dvh; overflow:auto; padding:22px max(22px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left)); background:var(--panel); border-radius:26px 26px 0 0; text-align:center; }.bottom-sheet h2 { margin:10px 0 20px; }.sheet-close { float:right; border:0; background:none; color:var(--muted); min-height:44px; }.share-code { font:800 3.4rem Manrope,sans-serif; letter-spacing:.22em; margin-left:.22em; }.bottom-sheet svg { display:block; margin:14px auto; }.bottom-sheet>p { color:var(--muted); font-size:.83rem; }.bottom-sheet>.button { width:100%; }
@@ -127,5 +126,87 @@ h1,h2 { font-family:Manrope,sans-serif; letter-spacing:-.04em; }
 .session-lifecycle p { margin: 6px 0; }
 .session-lifecycle .button { min-height: 44px; margin: 4px; }
 .session-lifecycle h2 { font-size: 1rem; }
-.live-page:not(.guest-live):has(> .session-lifecycle) { grid-template-rows: auto auto 1fr auto; }
 .guest-live > .session-lifecycle { position: absolute; top: 52px; left: 12px; right: 12px; padding: 0 12px; pointer-events: none; }
+
+/* Fit the layout itself to small viewports; browser accessibility zoom stays enabled. */
+*, *::before, *::after { box-sizing: border-box; }
+body { min-width: 0; }
+.form-page, .setup-page, .landing-content, .owner-page { min-width: 0; width: 100%; }
+.landing-content { max-width: 420px; }
+.owner-page { width: min(100%, 760px); }
+.form-card, .field, .access-form, .access-list { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.field input { min-width: 0; max-width: 100%; }
+.button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.toggle-row > span, .media-permission-card > div > span, .guest-list span { min-width: 0; overflow-wrap: anywhere; }
+.toggle-row input { flex: 0 0 52px; }
+.session-preview { min-width: 0; flex-wrap: wrap; align-items: center; gap: 10px; }
+.session-preview > strong { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; }
+.camera-choice { min-inline-size: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.modal { min-width: 0; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.modal > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.modal .button { padding-inline: 10px; }
+.center-card { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.ended-page .center-card { width: 100%; padding-inline: 0; }
+.guest-list > div { gap: 8px; }
+.guest-list button { flex-shrink: 0; }
+
+/* Host identity and temporary actions occupy separate, predictable rows. */
+.host-live { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 48px minmax(0, 1fr) auto; }
+.host-live:has(> .session-lifecycle) { grid-template-rows: auto 48px minmax(0, 1fr) auto; }
+.host-room-header { display: flex; min-height: 44px; gap: 8px; padding-inline: max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-right)); }
+.host-room-header > strong { flex: none; margin: 0; font-size: clamp(.85rem, 3.7vw, 1rem); }
+.host-room-code { flex: none; font-size: .75rem; white-space: nowrap; }
+.host-room-code strong { letter-spacing: .08em; }
+.host-room-header .host-people { margin-left: auto; font-size: .75rem; }
+.host-room-header .connection { min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; }
+.host-status-row { display: flex; align-items: center; gap: 8px; min-width: 0; height: 48px; max-height: none; overflow: visible; padding: 2px max(10px, env(safe-area-inset-right)) 2px max(10px, env(safe-area-inset-left)); border-block: 1px solid var(--line); background: #10172a; }
+.host-status-actions { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.admission-inline { max-width: 100%; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.admission-inline .host-status-summary { flex: 0 1 auto; }
+.host-status-summary { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; }
+.session-time-left { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; flex: 0 0 112px; width: 112px; white-space: nowrap; font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.session-time-left strong { color: var(--text); font-weight: 600; }
+.status-action { flex: none; min-width: 44px; min-height: 44px; padding: 4px 6px; border: 0; border-radius: 8px; background: var(--panel-2); color: var(--text); font: 600 .75rem 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+.status-allow { background: var(--accent-2); color: #071610; }
+.session-status-dialog { width: min(480px, calc(100% - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 18px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.session-status-dialog::backdrop { background: rgba(0,0,0,.65); }
+.status-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.status-dialog-heading h2 { min-width: 0; font-size: 1.2rem; margin: 0; }
+.session-status-dialog .button { min-height: 44px; margin: 4px 4px 4px 0; padding-inline: 12px; }
+.admission-review { display: grid; gap: 12px; margin-top: 16px; }
+.admission-review-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.admission-review-row > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .host-room-header .host-people { display: none; }
+  .host-room-header .live-badge { margin-left: auto; }
+}
+@media (max-width: 430px) {
+  .app-shell { padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); }
+  .form-page, .setup-page { margin-block: 12px; }
+  .form-heading { margin: 12px 0 20px; }
+  .form-heading h1, .setup-page h1 { font-size: clamp(1.65rem, 7.5vw, 2rem); }
+  .form-card { padding: 16px; gap: 16px; }
+  .button { padding-inline: 14px; }
+  .camera-choice .button { padding-inline: 6px; font-size: .85rem; }
+  .field .code-input { font-size: 1.8rem; height: 64px; letter-spacing: .25em; padding-left: calc(15px + .25em); }
+  .landing { padding-inline: 16px; padding-top: max(24px, env(safe-area-inset-top)); }
+  .landing .tagline { margin-bottom: 24px; }
+  .landing footer { margin-top: 32px; }
+  .role-card { padding: 14px 16px; min-height: 92px; }
+  .media-permission-card { padding: 14px; }
+  .modal-backdrop { padding: 12px; }
+  .modal { padding: 16px; }
+  .center-card, .ended-page { padding: 16px; }
+  .owner-page { gap: 16px; }
+  .owner-page h1 { font-size: clamp(1.6rem, 7.3vw, 2rem); }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .host-room-header { min-height: 36px; }
+  .host-status-row { padding-block: 0; }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .host-live .controls-bar { gap: 6px; padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+  .host-live .controls-bar .dock-button { flex-basis: 56px; width: 56px; min-width: 56px; max-width: 56px; min-height: 52px; padding-block: 4px; gap: 3px; }
+}
+
+.admission-name { min-height: 44px; border: 0; padding: 0; text-align: left; color: inherit; background: transparent; cursor: pointer; }

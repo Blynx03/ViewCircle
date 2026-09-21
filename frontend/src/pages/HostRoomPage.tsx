@@ -1,3 +1,4 @@
+import { HostRoomHeader } from '../components/HostRoomHeader';
 import { SessionLifecycle } from '../components/SessionLifecycle';
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, Track } from 'livekit-client';
 import { QRCodeSVG } from 'qrcode.react';
@@ -147,14 +148,11 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
   };
   const toggleCamera = async () => { setMediaError(''); try { await live.toggleCamera(); } catch { setMediaError('Camera could not be changed. Check camera access and try again.'); } };
   const flipCamera = async () => { setMediaError(''); try { await live.flipCamera(); } catch { setMediaError('Another camera is not available. Your current camera remains connected.'); } };
-  return <main className="live-page"><header className="live-header"><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span>{guests.length + 1} people</span><span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
-    <SessionLifecycle code={roomCode} host retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
-    <div className="room-overlay">Room <strong>{roomCode}</strong></div>
+  return <main className="live-page host-live"><HostRoomHeader roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
+    <SessionLifecycle code={roomCode} host mediaMessage={error || mediaError || live.mediaMessage} retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
       {!live.audioBlocked && !live.mediaMessage && !error && !mediaError && <HostCameraZoom getTrack={getPublishedCamera} />}
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
-      {live.mediaMessage && <p className="lifecycle-message" role="status">{live.mediaMessage}</p>}
-      {(error || mediaError) && <div className="floating-error">{error || mediaError}</div>}
     </section>
     <nav className="controls-bar" aria-label="Host controls">
       <ControlButton icon="mic" label={micBusy ? 'Requesting…' : local?.micOn ? 'Mic On' : 'Mic Off'} active={Boolean(local?.micOn)} disabled={micBusy} onClick={() => void toggleMic()} />

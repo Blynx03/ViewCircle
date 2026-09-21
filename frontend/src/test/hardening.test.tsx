@@ -34,22 +34,23 @@ it('shows recovery before creation and preserves the existing room on Rejoin', a
 it('warns at five minutes and shows the final waiting countdown', async () => {
   vi.useFakeTimers(); const now = Date.now(); vi.mocked(api.getSession).mockResolvedValue({ ...base, createdAt: new Date(now - 300_000).toISOString(), everJoined: false });
   render(<SessionLifecycle code="AB7K" host />); await act(async () => { await Promise.resolve(); });
-  expect(screen.getByText('No guests have joined yet. Do you want to keep waiting?')).toBeVisible(); expect(screen.getByText('Session ending in 0:30')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Review session status' }));
+  expect(screen.getByText('No guests have joined yet. Do you want to keep waiting?')).toBeVisible(); expect(screen.getAllByText('Session ending in 0:30').length).toBeGreaterThan(0);
   vi.mocked(api.keepWaiting).mockResolvedValue({ ...base, createdAt: new Date(now - 300_000).toISOString(), keepWaiting: true });
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Keep Waiting' }))); expect(api.keepWaiting).toHaveBeenCalledWith('AB7K');
 });
 it('dismisses the Host-alone notice without canceling the server timer', async () => {
   vi.mocked(api.getSession).mockResolvedValue({ ...base, everJoined: true, aloneSince: Date.now() - 100_000 });
-  render(<SessionLifecycle code="AB7K" host />); fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
-  expect(screen.queryByText(/All guests have left/)).not.toBeInTheDocument(); expect(screen.getByText(/Session ending in/)).toBeVisible(); expect(api.end).not.toHaveBeenCalled();
+  render(<SessionLifecycle code="AB7K" host />); fireEvent.click(await screen.findByRole('button', { name: 'Review session status' })); fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(screen.queryByText(/All guests have left/)).not.toBeInTheDocument(); expect(screen.getAllByText(/Session ending in/).length).toBeGreaterThan(0); expect(api.end).not.toHaveBeenCalled();
 });
 it('shows camera recovery with an explicit retry action and no camera-free mode', async () => {
   const retry = vi.fn(); vi.mocked(api.getSession).mockResolvedValue({ ...base, everJoined: true, cameraMissingSince: Date.now() });
-  render(<SessionLifecycle code="AB7K" host retryCamera={retry} />); fireEvent.click(await screen.findByRole('button', { name: 'Try Camera Again' })); expect(retry).toHaveBeenCalledOnce(); expect(screen.queryByText(/Continue Without Camera/i)).not.toBeInTheDocument();
+  render(<SessionLifecycle code="AB7K" host retryCamera={retry} />); fireEvent.click(await screen.findByRole('button', { name: 'Review session status' })); fireEvent.click(await screen.findByRole('button', { name: 'Try Camera Again' })); expect(retry).toHaveBeenCalledOnce(); expect(screen.queryByText(/Continue Without Camera/i)).not.toBeInTheDocument();
 });
 it('sends only the currently displayed request IDs for Allow All Waiting', async () => {
   vi.mocked(api.requests).mockResolvedValue([{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }]);
-  render(<SessionLifecycle code="AB7K" host />); fireEvent.click(await screen.findByRole('button', { name: 'Allow All Waiting' }));
+  render(<SessionLifecycle code="AB7K" host />); fireEvent.click(await screen.findByRole('button', { name: 'Review waiting Guests' })); fireEvent.click(screen.getByRole('button', { name: 'Allow All Waiting' }));
   await waitFor(() => expect(api.decide).toHaveBeenCalledWith('AB7K', ['one', 'two'], true));
 });
 it('supports Owner password autofill and accessible visibility without changing the password', async () => {
