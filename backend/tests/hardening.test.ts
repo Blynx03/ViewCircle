@@ -113,11 +113,26 @@ describe('server lifecycle boundaries', () => {
     const guestInfo = { identity: guest.identity, tracks: [] } as unknown as ParticipantInfo;
     vi.mocked(roomPresence).mockResolvedValue([hostInfo, guestInfo]); await reconcileSession(session, start);
     expect(session.everJoined).toBe(true);
-    vi.mocked(roomPresence).mockResolvedValue([hostInfo]); await reconcileSession(session, start + 1000); expect(session.aloneSince).toBe(start + 1000);
+    vi.mocked(roomPresence).mockResolvedValue([hostInfo]); await reconcileSession(session, start + 1000); expect(session.aloneSince).toBeUndefined();
     vi.mocked(roomPresence).mockResolvedValue([hostInfo, guestInfo]); await reconcileSession(session, start + 120_999); expect(session.aloneSince).toBeUndefined();
     vi.mocked(roomPresence).mockResolvedValue([guestInfo]); await reconcileSession(session, start + 121_000); expect(session.hostMissingSince).toBe(start + 121_000);
     vi.mocked(roomPresence).mockResolvedValue([hostInfo, guestInfo]); await reconcileSession(session, start + 240_999); expect(session.hostMissingSince).toBeUndefined();
     expect(session.createdAt.getTime()).toBe(start);
+  });
+  it('waits for Guest grace before starting the separate alone timer, but explicit leave bypasses grace', async () => {
+    const { session } = await service.create({ hostName: 'A' }); const start = session.createdAt.getTime();
+    const guest = { identity: 'guest-a', name: 'G', joinedAt: new Date(start), removed: false, connected: true };
+    session.guests.set(guest.identity, guest); session.everJoined = true;
+    vi.mocked(roomPresence).mockResolvedValue([{ identity: `host-${session.id}`, tracks: [{ source: TrackSource.CAMERA, muted: false }] }] as ParticipantInfo[]);
+    await reconcileSession(session, start); expect(session.aloneSince).toBeUndefined();
+    await reconcileSession(session, start + 119_999); expect(session.aloneSince).toBeUndefined();
+    await reconcileSession(session, start + 120_000); expect(session.aloneSince).toBe(start + 120_000);
+    await reconcileSession(session, start + 239_999); expect(session.status).toBe('LIVE');
+    await reconcileSession(session, start + 240_000); expect(session.status).toBe('ENDED');
+    const { session: other } = await service.create({ hostName: 'B' });
+    other.everJoined = true; other.guests.set(guest.identity, { ...guest, removed: true, missingSince: start });
+    vi.mocked(roomPresence).mockResolvedValue([]);
+    await reconcileSession(other, start); expect(other.aloneSince).toBe(start);
   });
   it.each(['aloneSince', 'hostMissingSince', 'cameraMissingSince'] as const)('ends %s after 120 seconds', async field => {
     const { session } = await service.create({ hostName: 'A' }); const start = session.createdAt.getTime(); session.everJoined = true; session[field] = start;

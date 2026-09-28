@@ -41,23 +41,23 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('room lifecycle', () => {
-  it('only unsubscribes Host video in background, restores once, and releases the room on unmount', async () => {
+  it('preserves background subscriptions, resumes without rejoining, and releases on unmount', async () => {
     const hook = renderHook(() => useLiveRoom(credentials));
     await waitFor(() => expect(hook.result.current.connection).toBe('connected'));
     act(() => visibility('hidden'));
-    expect(mock.publication.setSubscribed).toHaveBeenLastCalledWith(false);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     act(() => { window.dispatchEvent(new Event('pagehide')); });
-    expect(mock.publication.setSubscribed).toHaveBeenCalledTimes(1);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     expect(mock.room.disconnect).not.toHaveBeenCalled();
     expect(mock.room.localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled();
     act(() => { visibility('visible'); window.dispatchEvent(new Event('pageshow')); });
-    expect(mock.publication.setSubscribed).toHaveBeenLastCalledWith(true);
-    expect(mock.publication.setSubscribed).toHaveBeenCalledTimes(2);
+    expect(mock.room.connect).toHaveBeenCalledTimes(1);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     hook.unmount();
     expect(mock.room.disconnect).toHaveBeenCalledTimes(1);
     expect(mock.options).toHaveBeenCalledWith(expect.objectContaining({ disconnectOnPageLeave: false }));
     act(() => visibility('hidden'));
-    expect(mock.publication.setSubscribed).toHaveBeenCalledTimes(2);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
   });
   it('keeps receiving video while PiP is active and reconciles publications after reconnect', async () => {
     const hook = renderHook(() => useLiveRoom(credentials));
@@ -69,7 +69,18 @@ describe('room lifecycle', () => {
     expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     Object.defineProperty(document, 'pictureInPictureElement', { configurable: true, value: null });
     act(() => mock.listeners.get(RoomEvent.Reconnected)?.());
-    expect(mock.publication.setSubscribed).toHaveBeenLastCalledWith(false);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
+  });
+  it('automatically reconnects a real disconnect and does not reconnect just for visibility', async () => {
+    const hook = renderHook(() => useLiveRoom(credentials));
+    await waitFor(() => expect(hook.result.current.connection).toBe('connected'));
+    mock.room.state = 'disconnected';
+    mock.room.connect.mockImplementation(async () => { mock.room.state = 'connected'; });
+    await act(async () => { mock.listeners.get(RoomEvent.Disconnected)?.(); });
+    expect(mock.room.connect).toHaveBeenCalledTimes(2);
+    await act(async () => { visibility('hidden'); visibility('visible'); });
+    expect(mock.room.connect).toHaveBeenCalledTimes(2);
+    expect(mock.room.disconnect).not.toHaveBeenCalled();
   });
   it('does not reconnect a removed Guest', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ success: true, data: { removed: true, status: 'LIVE' } })));
@@ -110,7 +121,7 @@ describe('installed iOS Guest microphone preservation', () => {
     await act(() => hook.result.current.setMic(true));
     expect(audioSession.type).toBe('auto');
     act(() => visibility('hidden'));
-    expect(mock.publication.setSubscribed).toHaveBeenLastCalledWith(false);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     hook.unmount();
     Reflect.deleteProperty(navigator, 'standalone'); Reflect.deleteProperty(navigator, 'audioSession');
   });
@@ -154,7 +165,7 @@ describe('installed iOS Guest microphone preservation', () => {
     if (muted) await act(() => hook.result.current.setMic(false));
     mock.room.localParticipant.setMicrophoneEnabled.mockClear();
     act(() => { visibility('hidden'); window.dispatchEvent(new Event('pagehide')); });
-    expect(mock.publication.setSubscribed).toHaveBeenLastCalledWith(false);
+    expect(mock.publication.setSubscribed).not.toHaveBeenCalled();
     expect(stop).not.toHaveBeenCalled(); expect(restart).not.toHaveBeenCalled(); expect(mock.room.disconnect).not.toHaveBeenCalled();
     native.muted = true; native.readyState = ended ? 'ended' : 'live';
     act(() => { visibility('visible'); window.dispatchEvent(new Event('pageshow')); });

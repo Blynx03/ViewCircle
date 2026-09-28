@@ -76,3 +76,17 @@ describe('session API', () => {
     expect((await request().get('/api/sessions/IO10/public')).body.error.code).toBe('INVALID_INPUT');
   });
 });
+
+it('assigns eight Guests distinct stable chat slots without changing existing capacity', async () => {
+  const service = new SessionService(new InMemorySessionStore());
+  const { session } = await service.create({ hostName: 'Host' });
+  for (let i = 0; i < 8; i++) await service.join(session, `Guest ${i}`);
+  const slots = [...session.guests.values()].map(guest => guest.chatColor);
+  expect(new Set(slots).size).toBe(8); expect(slots).not.toContain(0);
+  const first = [...session.guests.values()][0]!;
+  first.connected = true; first.missingSince = Date.now();
+  first.connected = false;
+  const next = await service.join(session, 'Next'); expect(first.chatColor).toBe(slots[0]);
+  expect(session.guests.get(next.identity)?.chatColor).not.toBe(first.chatColor);
+  expect(service.publicView(session).capacity).toBe(10);
+});

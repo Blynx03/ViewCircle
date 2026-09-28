@@ -84,12 +84,14 @@ export class SessionService {
     await this.store.update(session.roomCode, (current) => {
       const active = [...current.guests.values()].filter((guest) => !guest.removed && guest.connected !== false).length;
       if (active < 10 && !current.locked && !['ENDED', 'EXPIRED'].includes(current.status)) {
-        current.guests.set(identity, { identity, name, joinedAt: new Date(), removed: false }); accepted = true;
+        const used = new Set([...current.guests.values()].filter(g => !g.removed).map(g => g.chatColor));
+        const chatColor = Array.from({ length: current.guests.size + 1 }, (_, i) => i + 1).find(i => !used.has(i)) ?? 1;
+        current.guests.set(identity, { identity, name, joinedAt: new Date(), removed: false, chatColor }); accepted = true;
       }
     });
     if (!accepted) throw new ServiceError('SESSION_FULL', 'This session is full.', 409);
     let token: string;
-    try { token = await createMediaToken({ roomCode: session.roomCode, identity, name, role: 'guest', ttl: this.remainingSeconds(session) }); }
+    try { token = await createMediaToken({ roomCode: session.roomCode, identity, name, role: 'guest', chatColor: session.guests.get(identity)?.chatColor ?? 1, ttl: this.remainingSeconds(session) }); }
     catch (error) { session.guests.delete(identity); throw error; }
     if (['ENDED', 'EXPIRED'].includes(session.status)) throw new ServiceError('SESSION_ENDED', 'This session has ended.', 410);
     return { token, identity };

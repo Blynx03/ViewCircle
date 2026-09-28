@@ -10,7 +10,7 @@ import { SessionEnded } from '../components/StatusViews';
 const mock = vi.hoisted(() => ({ stop: vi.fn(), attach: vi.fn(), detach: vi.fn(), iosStandalone: false, sessionEnded: false, connection: 'connected', hasVideo: true, camera: null as MediaStreamTrack | null }));
 vi.mock('livekit-client', async load => ({ ...await load<typeof import('livekit-client')>(), createLocalVideoTrack: vi.fn(async () => mock) }));
 vi.mock('../hooks/useLiveRoom', () => ({ useLiveRoom: () => ({
-  roomRef: { current: { localParticipant: { getTrackPublication: () => mock.camera ? { track: { mediaStreamTrack: mock.camera, isMuted: false } } : undefined } } }, participants: [], videoRef: { current: null }, audioContainerRef: { current: null }, hasVideo: mock.hasVideo,
+  roomRef: { current: { on: vi.fn(), off: vi.fn(), disconnect: vi.fn(), localParticipant: { getTrackPublication: () => mock.camera ? { track: { mediaStreamTrack: mock.camera, isMuted: false } } : undefined } } }, participants: [], videoRef: { current: null }, audioContainerRef: { current: null }, hasVideo: mock.hasVideo,
   connection: mock.connection, soundOn: true, sessionEnded: mock.sessionEnded, removed: false,
 }) }));
 vi.mock('../hooks/usePictureInPicture', () => ({ usePictureInPicture: () => ({ supported: false }) }));

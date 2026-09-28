@@ -7,6 +7,8 @@ export interface GuestRecord {
   joinedAt: Date;
   removed: boolean;
   connected?: boolean;
+  missingSince?: number;
+  chatColor?: number;
 }
 
 export interface Session {

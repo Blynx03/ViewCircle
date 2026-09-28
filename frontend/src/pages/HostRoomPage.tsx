@@ -1,3 +1,4 @@
+import { SessionChat } from '../components/SessionChat';
 import { guestInvitationUrl, copyGuestCode, shareGuestInvitation } from '../utilities/guest-invitation';
 import { HostRoomHeader } from '../components/HostRoomHeader';
 import { SessionLifecycle } from '../components/SessionLifecycle';
@@ -30,9 +31,9 @@ export function HostRoomPage() {
   const previewTrackRef = useRef<LocalVideoTrack | null>(null); const publishedTracksRef = useRef<Array<LocalAudioTrack | LocalVideoTrack>>([]);
   const online = useNetworkStatus();
   const cameraPermission = usePermissionState('camera'); const microphonePermission = usePermissionState('microphone');
-  const live = useLiveRoom(credentials, tracks, facingMode, roomCode); useWakeLock(Boolean(credentials) && !live.sessionEnded);
+  const live = useLiveRoom(credentials, tracks, facingMode, roomCode); useWakeLock(Boolean(credentials) && live.hasVideo && live.connection === 'connected' && !live.sessionEnded && !serverEnded);
   const isLive = Boolean(credentials);
-  useEffect(() => { if (serverEnded) { previewTrackRef.current?.stop(); microphoneRef.current?.stop(); publishedTracksRef.current.forEach(track => track.stop()); } }, [serverEnded]);
+  useEffect(() => { if (serverEnded) { previewTrackRef.current?.stop(); microphoneRef.current?.stop(); publishedTracksRef.current.forEach(track => track.stop()); void live.roomRef.current?.disconnect(); } }, [serverEnded, live.roomRef]);
   const getPreviewCamera = useCallback(() => preview && !preview.isMuted ? preview.mediaStreamTrack : null, [preview]);
 
   useEffect(() => { void api.getSession(roomCode).then((value) => { setSession(value); setLocked(value.locked); }).catch((reason: Error) => setError(reason.message)); }, [roomCode]);
@@ -115,12 +116,12 @@ export function HostRoomPage() {
     {permissionHelp && <PermissionHelp kind={permissionHelp} busy={busyPermission === permissionHelp} retry={() => void (permissionHelp === 'camera' ? enableCamera() : enableMicrophone())} close={() => setPermissionHelp(null)} />}
   </section></AppLayout>;
 
-  return <LiveHostView roomCode={roomCode} live={live} online={online} locked={locked} drawer={drawer} setDrawer={setDrawer} shareUrl={shareUrl} share={share} toggleLock={toggleLock} confirmEnd={confirmEnd} setConfirmEnd={setConfirmEnd} end={end} busy={busy} error={error} />;
+  return <LiveHostView onEnded={handleServerEnd} roomCode={roomCode} live={live} online={online} locked={locked} drawer={drawer} setDrawer={setDrawer} shareUrl={shareUrl} share={share} toggleLock={toggleLock} confirmEnd={confirmEnd} setConfirmEnd={setConfirmEnd} end={end} busy={busy} error={error} />;
 }
 
 type LiveHook = ReturnType<typeof useLiveRoom>;
-function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, shareUrl, share, toggleLock, confirmEnd, setConfirmEnd, end, busy, error }: {
-  roomCode: string; live: LiveHook; online: boolean; locked: boolean; drawer: 'share' | 'guests' | null; setDrawer: (value: 'share' | 'guests' | null) => void;
+function LiveHostView({ onEnded, roomCode, live, online, locked, drawer, setDrawer, shareUrl, share, toggleLock, confirmEnd, setConfirmEnd, end, busy, error }: {
+  onEnded: () => void; roomCode: string; live: LiveHook; online: boolean; locked: boolean; drawer: 'share' | 'guests' | null; setDrawer: (value: 'share' | 'guests' | null) => void;
   shareUrl: string; share: () => Promise<void>; toggleLock: () => Promise<void>; confirmEnd: boolean; setConfirmEnd: (value: boolean) => void; end: () => Promise<void>; busy: boolean; error: string;
 }) {
   const getPublishedCamera = useCallback(() => {
@@ -149,10 +150,11 @@ function LiveHostView({ roomCode, live, online, locked, drawer, setDrawer, share
   const toggleCamera = async () => { setMediaError(''); try { await live.toggleCamera(); } catch { setMediaError('Camera could not be changed. Check camera access and try again.'); } };
   const flipCamera = async () => { setMediaError(''); try { await live.flipCamera(); } catch { setMediaError('Another camera is not available. Your current camera remains connected.'); } };
   return <main className="live-page host-live"><HostRoomHeader showCode={hasStarted} roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
-    <SessionLifecycle code={roomCode} host mediaMessage={error || mediaError || live.mediaMessage} retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
+    <SessionLifecycle code={roomCode} host onEnded={onEnded} mediaMessage={error || mediaError || live.mediaMessage} retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
       {!live.audioBlocked && !live.mediaMessage && !error && !mediaError && <HostCameraZoom getTrack={getPublishedCamera} />}
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
+      <SessionChat key={roomCode} roomRef={live.roomRef} connection={live.connection} />
     </section>
     <nav className="controls-bar" aria-label="Host controls">
       <ControlButton icon="mic" label={micBusy ? 'Requesting…' : local?.micOn ? 'Mic On' : 'Mic Off'} active={Boolean(local?.micOn)} disabled={micBusy} onClick={() => void toggleMic()} />

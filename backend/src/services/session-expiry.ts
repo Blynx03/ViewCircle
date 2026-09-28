@@ -3,6 +3,7 @@ import type { Session } from '../types/session.js';
 import { sessionStore } from '../stores/session-store.js';
 import { expireRoom, roomPresence } from './livekit-service.js';
 
+export const GUEST_RECONNECT_GRACE = 120_000;
 export const MAX_DURATION = 180 * 60_000;
 const endings = new Map<string, Promise<void>>();
 export function endSession(session: Session, reason = 'The session has ended.'): Promise<void> {
@@ -62,10 +63,17 @@ export async function reconcileSession(session: Session, now = Date.now()): Prom
     for (const guest of session.guests.values()) {
       // Allow issued tokens a short connection window, but do not count them as
       // actual attendance or cancel the first-Guest timer until media connects.
-      if (guests.some(p => p.identity === guest.identity)) guest.connected = true;
-      else if (now - guest.joinedAt.getTime() > 30_000) guest.connected = false;
+      if (guest.removed) { guest.connected = false; delete guest.missingSince; continue; }
+      if (guests.some(p => p.identity === guest.identity)) {
+        guest.connected = true; delete guest.missingSince;
+      } else if (guest.connected === true || guest.missingSince !== undefined) {
+        guest.missingSince ??= now;
+        guest.connected = now < guest.missingSince + GUEST_RECONNECT_GRACE;
+      } else if (now - guest.joinedAt.getTime() > 30_000) guest.connected = false;
     }
-    if (guests.length) { session.everJoined = true; delete session.aloneSince; }
+    const reconnecting = [...session.guests.values()].some(g => !g.removed && g.missingSince !== undefined && now < g.missingSince + GUEST_RECONNECT_GRACE);
+    if (guests.length) session.everJoined = true;
+    if (guests.length || reconnecting) delete session.aloneSince;
     else if (session.everJoined) session.aloneSince ??= now;
   } catch (error) {
     const missing = error as { status?: number; code?: string };

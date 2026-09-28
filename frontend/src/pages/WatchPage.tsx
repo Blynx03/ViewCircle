@@ -1,3 +1,4 @@
+import { SessionChat } from '../components/SessionChat';
 import { PrivateGuestShare } from '../components/PrivateGuestShare';
 import { SessionLifecycle } from '../components/SessionLifecycle';
 import { useEffect, useState } from 'react';
@@ -51,10 +52,11 @@ export function WatchPage() {
   return <main className="live-page guest-live"><header className={`live-header ${privateRoom === roomCode ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">{live.participants.length} people</span>{privateRoom === roomCode && <PrivateGuestShare key={roomCode} code={roomCode} />}<span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
     <SessionLifecycle code={roomCode} />
     <GuestVideoViewport sessionKey={`${roomCode}:${credentials.identity}`} onTap={() => setRestoreControls(value => value + 1)} onInteraction={setZoomInteraction}><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
-      {(pip.message || live.mediaMessage || live.videoPaused) && <p className="lifecycle-message" role="status">{live.videoPaused ? 'Video paused while ViewCircle is in the background' : live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
+      {(pip.message || live.mediaMessage) && <p className="lifecycle-message" role="status">{live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
       <PortraitTip sessionKey={credentials.identity} hasVideo={live.hasVideo} />
     </GuestVideoViewport>
+    <div className="guest-chat-layer"><SessionChat key={`${roomCode}:${credentials.identity}`} roomRef={live.roomRef} connection={live.connection} /></div>
     <GuestControls restoreSignal={restoreControls} panelOpen={safariHelp || drawer || micHelp || zoomInteraction} micOn={Boolean(local?.micOn)} micBusy={micBusy} soundOn={live.soundOn}
       iosStandalone={iosStandalone} pipSupported={pip.supported} pipActive={pip.active} hasVideo={live.hasVideo}
       onMic={() => void mic()} onSound={live.toggleSound}

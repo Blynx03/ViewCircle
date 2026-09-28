@@ -12,7 +12,7 @@ function payload(token: string): TokenPayload {
 describe('LiveKit media grants', () => {
   it('limits Guests to microphone publishing while retaining subscriptions', async () => {
     const grant = payload(await createMediaToken({ roomCode: '7K4P', identity: 'guest-test', name: 'Guest', role: 'guest' })).video;
-    expect(grant).toMatchObject({ canPublish: true, canSubscribe: true, room: '7K4P' });
+    expect(grant).toMatchObject({ canPublish: true, canSubscribe: true, canPublishData: true, room: '7K4P' });
     expect(grant?.canPublishSources).toEqual(['microphone']);
     expect(grant?.canPublishSources).not.toContain('camera');
     expect(grant?.canPublishSources).not.toContain('screen_share');

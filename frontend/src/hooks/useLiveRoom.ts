@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConnectionState as LKConnectionState, LocalAudioTrack, LocalVideoTrack, RemoteParticipant, RemoteTrack, RemoteTrackPublication, Room, RoomEvent, Track, TrackPublication } from 'livekit-client';
 import { isIOSStandalone } from '../utilities/browser-environment';
 import { api } from '../api/client';
-import { isPictureInPicture } from './usePictureInPicture';
 import type { Credentials } from '../types/session';
 
 const installedIOSGuest = (identity: string) => identity.startsWith('guest-') && isIOSStandalone(navigator, window.matchMedia?.('(display-mode: standalone)').matches ?? false);
@@ -24,7 +23,6 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
   const [sessionEnded, setSessionEnded] = useState(false);
   const [removed, setRemoved] = useState(false);
   const [mediaMessage, setMediaMessage] = useState('');
-  const [videoPaused, setVideoPaused] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
 
   const refresh = useCallback((room: Room) => {
@@ -66,31 +64,20 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
       mediaListeners.set(native, updateMedia);
       updateMedia();
     };
-    const syncVideo = () => {
-      if (disposed || terminal) return;
-      const receive = !hidden || isPictureInPicture(videoRef.current);
-      setVideoPaused(hidden && !receive && credentials.identity.startsWith('guest-'));
-      for (const participant of room.remoteParticipants.values()) {
-        if (!participant.identity.startsWith('host-')) continue;
-        for (const publication of participant.videoTrackPublications.values()) {
-          if (publication.isDesired !== receive) publication.setSubscribed(receive);
-        }
-      }
-    };
     const checkSession = async () => {
       if (!roomCode) return true;
       try {
         const status = await api.participantStatus(roomCode, credentials.identity);
         if (disposed || terminal) return false;
         if (status.removed || ['ENDED', 'EXPIRED'].includes(status.status)) {
-          terminal = true; window.clearInterval(recoveryTimer); setVideoPaused(false); setMediaMessage(''); setRemoved(status.removed); setSessionEnded(!status.removed);
+          terminal = true; window.clearInterval(recoveryTimer); setMediaMessage(''); setRemoved(status.removed); setSessionEnded(!status.removed);
           retained.forEach((track) => track.stop()); await room.disconnect(); return false;
         }
         return true;
       } catch (error) {
         if (disposed || terminal) return false;
         if ((error as { code?: string }).code === 'SESSION_NOT_FOUND') {
-          terminal = true; window.clearInterval(recoveryTimer); setVideoPaused(false); setMediaMessage(''); setSessionEnded(true); retained.forEach((track) => track.stop()); await room.disconnect();
+          terminal = true; window.clearInterval(recoveryTimer); setMediaMessage(''); setSessionEnded(true); retained.forEach((track) => track.stop()); await room.disconnect();
         }
         return false;
       }
@@ -121,20 +108,21 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
           if (disposed || terminal) { track.stop(); return; }
         }
         for (const track of retained) monitor(track);
-        syncVideo();
         await room.startAudio().catch(() => setAudioBlocked(true));
         if (videoRef.current?.srcObject) await videoRef.current.play().catch(() => {});
         setMediaMessage(''); refresh(room);
       } catch { setMediaMessage('Could not restore media yet. Check camera and microphone access, then try again.'); }
       finally { recovering = false; }
     };
-    const visibility = () => { hidden = document.visibilityState === 'hidden'; syncVideo(); if (!hidden) void recover(); };
-    const hide = () => { hidden = true; syncVideo(); };
-    const show = () => { hidden = document.visibilityState === 'hidden'; syncVideo(); void recover(); };
-    const videoElement = videoRef.current;
+    const resumePlayback = () => { if (videoRef.current?.srcObject) void videoRef.current.play().catch(() => {}); };
+    const visibility = () => { hidden = document.visibilityState === 'hidden'; if (!hidden) { resumePlayback(); void recover(); } };
+    const hide = () => { hidden = true; };
+    const show = () => { hidden = document.visibilityState === 'hidden'; resumePlayback(); void recover(); };
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('pagehide', hide); window.addEventListener('pageshow', show); window.addEventListener('online', show);
-    for (const event of ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged']) videoElement?.addEventListener(event, syncVideo);
+    const reconnectTimer = window.setInterval(() => {
+      if (!hidden && room.state === LKConnectionState.Disconnected) void recover();
+    }, 3000);
     const recoveryTimer = window.setInterval(() => {
       if (!hidden) void recover();
     }, 30000);
@@ -157,10 +145,10 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
       .on(RoomEvent.ParticipantConnected, update).on(RoomEvent.ParticipantDisconnected, update)
       .on(RoomEvent.ActiveSpeakersChanged, update).on(RoomEvent.TrackMuted, muted).on(RoomEvent.TrackUnmuted, unmuted)
       .on(RoomEvent.ConnectionStateChanged, state).on(RoomEvent.AudioPlaybackStatusChanged, playback)
-      .on(RoomEvent.TrackPublished, syncVideo).on(RoomEvent.Reconnected, () => { syncVideo(); void recover(); })
+      .on(RoomEvent.Reconnected, () => { void recover(); })
       .on(RoomEvent.LocalTrackPublished, (publication) => { if (publication.track) monitor(publication.track as PublishableLocalTrack); })
       .on(RoomEvent.LocalTrackUnpublished, (publication) => { if (publication.track) retained.add(publication.track as PublishableLocalTrack); })
-      .on(RoomEvent.Disconnected, () => { setConnection('disconnected'); if (!disposed && !terminal) void checkSession(); });
+      .on(RoomEvent.Disconnected, () => { setConnection('disconnected'); if (!disposed && !terminal) void recover(); });
     void (async () => {
       try {
         await room.connect(credentials.livekitUrl, credentials.token);
@@ -176,14 +164,13 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
             track.attach(videoRef.current); setHasVideo(true);
           }
         }
-        syncVideo(); refresh(room); setConnection('connected');
+        refresh(room); setConnection('connected');
       } catch { setConnection('disconnected'); }
     })();
     return () => {
-      disposed = true; window.clearInterval(recoveryTimer);
+      disposed = true; window.clearInterval(recoveryTimer); window.clearInterval(reconnectTimer);
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', show); window.removeEventListener('online', show);
-      for (const event of ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged']) videoElement?.removeEventListener(event, syncVideo);
       for (const [native, listener] of mediaListeners) for (const event of ['mute', 'unmute', 'ended']) native.removeEventListener(event, listener);
       room.removeAllListeners(); retained.forEach((track) => track.stop()); void room.disconnect(); roomRef.current = null;
     };
@@ -234,5 +221,5 @@ export function useLiveRoom(credentials: Credentials | null, localTracks: Publis
     });
   }, []);
   const enableAudio = useCallback(async () => { try { await roomRef.current?.startAudio(); setAudioBlocked(!roomRef.current?.canPlaybackAudio); } catch { setAudioBlocked(true); } }, []);
-  return { sessionEnded, removed, mediaMessage, videoPaused, roomRef, videoRef, audioContainerRef, connection, participants, hasVideo, soundOn, audioBlocked, setMic, toggleCamera, retryCamera, flipCamera, toggleSound, enableAudio };
+  return { sessionEnded, removed, mediaMessage, roomRef, videoRef, audioContainerRef, connection, participants, hasVideo, soundOn, audioBlocked, setMic, toggleCamera, retryCamera, flipCamera, toggleSound, enableAudio };
 }

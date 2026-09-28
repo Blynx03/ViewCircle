@@ -1,3 +1,5 @@
+import { SessionChat } from '../src/components/SessionChat';
+import type { Room } from 'livekit-client';
 import { PrivateGuestShare } from '../src/components/PrivateGuestShare';
 import { HostRoomHeader } from '../src/components/HostRoomHeader';
 import { SessionLifecycle } from '../src/components/SessionLifecycle';
@@ -11,6 +13,7 @@ import '../src/styles/global.css';
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant');
 const host = variant === 'host';
+const chatRoom = { current: { on: () => {}, off: () => {}, localParticipant: { identity: 'host-layout', name: 'Host', publishData: async () => {} } } as unknown as Room };
 const noop = () => undefined;
 // Capability fixture only: browser tests exercise the actual UI/controller, not
 // claim physical-camera or remote WebRTC validation.
@@ -27,8 +30,9 @@ function Fixture() {
   const [restore, setRestore] = useState(0);
   return <main className={`live-page ${host && query.has('status') ? 'host-live' : host ? '' : 'guest-live'}`}>
   {host && query.has('status') ? <><HostRoomHeader roomCode="AB7K" people={11} connection="Connected" connected /><SessionLifecycle code="AB7K" host /></> : <header className={`live-header ${variant === 'private' ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">11 people</span>{variant === 'private' && <PrivateGuestShare code="AB7K" />}<span className="connection">Reconnecting…</span></header>}
-  {host ? <section className="video-stage"><video className="host-video" /><HostCameraZoom getTrack={getCamera} /></section>
+  {host ? <section className="video-stage"><video className="host-video" /><HostCameraZoom getTrack={getCamera} />{query.has('chat') && <SessionChat roomRef={chatRoom} connection="connected" />}</section>
     : <GuestVideoViewport sessionKey="layout" onTap={() => setRestore(value => value + 1)} onInteraction={setGesture}><video className="host-video" /></GuestVideoViewport>}
+  {!host && query.has('chat') && <div className="guest-chat-layer"><SessionChat roomRef={chatRoom} connection="connected" /></div>}
   {host ? <nav className="controls-bar" aria-label="Host controls">
     <ControlButton label="Mic On" icon="mic" active onClick={noop} />
     <ControlButton label="Camera On" icon="camera" active onClick={noop} />

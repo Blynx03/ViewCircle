@@ -10,19 +10,20 @@ export async function createMediaToken(input: {
   name: string;
   role: 'host' | 'guest';
   ttl?: number;
+  chatColor?: number;
 }): Promise<string> {
   const token = new AccessToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {
     identity: input.identity,
     name: input.name,
     ttl: input.ttl ?? 180 * 60,
-    metadata: JSON.stringify({ role: input.role })
+    metadata: JSON.stringify({ role: input.role, chatColor: input.chatColor ?? 0 })
   });
   token.addGrant({
     roomJoin: true,
     room: input.roomCode,
     canSubscribe: true,
     canPublish: true,
-    canPublishData: input.role === 'host',
+    canPublishData: true,
     canPublishSources: input.role === 'host'
       ? [TrackSource.CAMERA, TrackSource.MICROPHONE]
       : [TrackSource.MICROPHONE]

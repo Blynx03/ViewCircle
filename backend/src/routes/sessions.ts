@@ -178,6 +178,7 @@ router.post('/:roomCode/leave', limiter(60), async (request, response) => {
         !session.guests.has(identity)) throw new Error('Wrong participation');
   } catch { throw new ServiceError('GUEST_UNAUTHORIZED', 'Guest authorization is required.', 403); }
   await sessionStore.update(roomCode, current => { const guest = current.guests.get(identity); if (guest) guest.removed = true; });
+  try { await removeParticipant(roomCode, identity); } catch { /* Already disconnected; authoritative leave is retained. */ }
   response.json({ success: true, data: {} });
 });
 

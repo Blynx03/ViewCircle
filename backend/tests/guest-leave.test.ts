@@ -37,7 +37,7 @@ it('binds self-leave to the signed Guest token, preserves peers/Host/counts, and
   expect(session.guests.get(a.identity)?.removed).toBe(true);
   expect(session.guests.get(b.identity)?.removed).toBe(false);
   expect(session.status).toBe('LIVE'); expect(service.publicView(session).guestCount).toBe(1);
-  expect(closeRoom).not.toHaveBeenCalled(); expect(removeParticipant).not.toHaveBeenCalled();
+  expect(closeRoom).not.toHaveBeenCalled(); expect(removeParticipant).toHaveBeenCalledWith(session.roomCode, a.identity);
   const host = () => request(app).post(`/api/sessions/${session.roomCode}/remove-participant`).set('X-ViewCircle-Request', '1').set('Cookie', `vc_host=${authority}`);
   expect((await host().send({ identity: b.identity })).status).toBe(200);
   expect(removeParticipant).toHaveBeenCalledWith(session.roomCode, b.identity);
