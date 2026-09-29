@@ -8,7 +8,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-ViewCircle-Request': '1', ...init?.headers }
   });
   const payload = await response.json() as Envelope<T>;
-  if (!payload.success) throw Object.assign(new Error(payload.error.message), { code: payload.error.code });
+  if (!payload.success) throw Object.assign(new Error(payload.error.message), { code: payload.error.code, retryAfterSeconds: payload.error.retryAfterSeconds });
   return payload.data;
 }
 

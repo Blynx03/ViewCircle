@@ -17,6 +17,7 @@ export interface AccessStore {
   deleteOwner(hash: string): Promise<void>;
   findVisitor(hash: string): Promise<AccessRequest | undefined>;
   createRequest(item: AccessRequest): Promise<void>;
+  createOrReuseRequest(item: AccessRequest, beforeCreate: () => void): Promise<{ item: AccessRequest; created: boolean }>;
   listRequests(): Promise<AccessRequest[]>;
   decide(id: string, action: 'approve' | 'deny', visitorTtl: number): Promise<AccessRequest>;
   reserveCreation(identity: AccessIdentity, max: number): Promise<number>;
@@ -45,8 +46,18 @@ export class MemoryAccessStore implements AccessStore {
   async findOwner(hash: string) { this.prune(); return this.owners.get(hash); }
   async putOwner(hash: string, session: OwnerSession) { this.prune(); this.owners.set(hash, session); }
   async deleteOwner(hash: string) { this.owners.delete(hash); }
-  async findVisitor(hash: string) { this.prune(); return [...this.requests.values()].find(item => item.browserHash === hash); }
+  async findVisitor(hash: string) { this.prune(); return [...this.requests.values()].reverse().find(item => item.browserHash === hash); }
   async createRequest(item: AccessRequest) { this.prune(); this.requests.set(item.id, item); }
+  async createOrReuseRequest(item: AccessRequest, beforeCreate: () => void) {
+    this.prune();
+    const existing = [...this.requests.values()].reverse().find(value => value.browserHash === item.browserHash);
+    if (existing && ['pending', 'approved'].includes(existing.status)) return { item: existing, created: false };
+    // No await between the reuse check, throttle reservation and record insertion.
+    // A future database adapter must implement this boundary transactionally.
+    beforeCreate();
+    this.requests.set(item.id, item);
+    return { item, created: true };
+  }
   async listRequests() { this.prune(); return [...this.requests.values()].sort((a, b) => b.createdAt - a.createdAt); }
   async decide(id: string, action: 'approve' | 'deny', visitorTtl: number) {
     this.prune(); const item = this.requests.get(id);

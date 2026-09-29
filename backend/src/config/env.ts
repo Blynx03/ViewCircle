@@ -9,8 +9,6 @@ const schema = z.object({
   OWNER_REMEMBER_ME_DAYS: z.coerce.number().positive().default(30),
   VISITOR_ACCESS_TTL_HOURS: z.coerce.number().positive().default(12),
   ACCESS_REQUEST_TTL_MINUTES: z.coerce.number().positive().default(30),
-  ACCESS_REQUEST_MAX_PER_HOUR: z.coerce.number().int().positive().default(5),
-  ACCESS_REQUEST_GLOBAL_MAX_PER_HOUR: z.coerce.number().int().positive().default(30),
   OWNER_MAX_FAILED_LOGIN_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OWNER_LOGIN_LOCKOUT_MINUTES: z.coerce.number().positive().default(15),
   DEMO_MAX_ACTIVE_SESSIONS: z.coerce.number().int().positive().default(2),

@@ -1,6 +1,6 @@
 # Owner-approved Host access
 
-Current behavior and validation: [production hardening](production-hardening.md). Historical validation notes below describe earlier revisions.
+Current access-request behavior and validation: [access-request reliability](access-request-reliability.md). Other protections: [production hardening](production-hardening.md). Historical validation notes below describe earlier revisions.
 
 Implemented locally. No commit, push, or deployment is part of this change.
 
@@ -10,7 +10,7 @@ Visit `/owner` for the private Owner login and small request dashboard. Credenti
 
 Remember Me off uses a browser-session cookie with a backend expiry of 12 hours. Browser session restore can retain session cookies, but the server deadline still applies. Remember Me on adds a persistent cookie lifetime of 30 days. Both durations are configurable, fixed from login, and not extended by polling. Credentials are never stored in localStorage, URLs, responses, or logs.
 
-Only `/host` (Create Room) sits inside `AccessGate`. The root Host/Guest choice, `/join`, `/join/:roomCode`, `/watch/:roomCode`, and ended page are public. The existing-room `/host/:roomCode` flow uses room-specific Host authority, not creation approval. An unauthorized Host stays on `/host` while requesting access; approval automatically reveals Create Room at that same URL. An unapproved prospective Host supplies a required name (80 characters maximum) and optional email/company (160). No account or password. A random `vc_visitor` HttpOnly cookie binds this browser to its request. The backend stores only its HMAC digest. Pending requests expire after 30 minutes; approval changes that same server-side record to approved for 12 hours **from approval**, with no bearer token exposed to React. Refresh retains the cookie. Denied/expired visitors can request again, subject to cooldown and limits.
+Only `/host` (Create Room) sits inside `AccessGate`. The root Host/Guest choice, `/join`, `/join/:roomCode`, `/watch/:roomCode`, and ended page are public. The existing-room `/host/:roomCode` flow uses room-specific Host authority, not creation approval. An unauthorized Host stays on `/host` while requesting access; approval automatically reveals Create Room at that same URL. An unapproved prospective Host supplies a required name (80 characters maximum) and optional email/company (160). No account or password. A random `vc_visitor` HttpOnly cookie binds this browser to its request. The backend stores only its HMAC digest. Pending requests expire after 30 minutes; approval changes that same server-side record to approved for 12 hours **from approval**, with no bearer token exposed to React. Refresh retains the cookie. Denied/expired visitors can request again, subject only to new-request abuse limits; there is no five-minute cooldown.
 
 The gate polls `GET /api/access` every five seconds while unauthorized, every minute while authorized, at the authorization deadline, and when returning to the foreground. Requests do not overlap within the polling loop and timers/listeners are cleaned up. Backend creation middleware always checks current Host authorization. The frontend removes the creation form when it observes expiry; existing rooms retain their own Host authority and room lifetime. Owner dashboard polling remains available every five seconds even if push fails.
 
@@ -22,7 +22,7 @@ The gate polls `GET /api/access` every five seconds while unauthorized, every mi
 
 Both access cookies are HttpOnly, host-only (no Domain), SameSite=Lax, Path=/api, and Secure in production. The visitor cookie may outlive backend authorization by the pending-request duration; this does not extend approval. Store records and expiry are authoritative. API responses are `Cache-Control: no-store`, and the service worker does not cache `/api/`.
 
-All API mutations require `X-ViewCircle-Request: 1`. Supplied Origin must exactly match `CLIENT_URL`, and cross-site Fetch Metadata is rejected. This covers login, logout, approval/denial, request creation, subscriptions and session mutations. Cross-site forms cannot supply the header; CORS only permits the configured frontend origin. Non-browser clients may omit Origin but still need the header and authorization. Status GETs do not change authorization or mint cookies.
+All API mutations require `X-ViewCircle-Request: 1`. Supplied Origin must exactly match `CLIENT_URL`, and cross-site Fetch Metadata is rejected. This covers login, logout, approval/denial, request creation, subscriptions and session mutations. Cross-site forms cannot supply the header; CORS only permits the configured frontend origin. Non-browser clients may omit Origin but still need the header and authorization. Status GETs do not change authorization. `GET /api/access` establishes a missing opaque visitor identity cookie before submission; it does not create an access request or approval.
 
 Use the existing same-origin Vercel `/api` rewrite (or Vite proxy locally). Do not switch cookies to SameSite=None to work around a direct cross-site API URL. No new Vercel environment variables are needed; keep `VITE_API_URL` unset/empty for this deployment.
 
@@ -36,6 +36,8 @@ Use the existing same-origin Vercel `/api` rewrite (or Vite proxy locally). Do n
 | GET /api/access-requests/:id/status | Requires matching browser cookie; random IDs alone grant nothing |
 | POST /api/owner/login | Public, CSRF and brute-force limits |
 | POST /api/owner/logout | Owner |
+| GET /api/owner/access-request-protection | Owner; aggregate throttle status, no IP addresses |
+| POST /api/owner/access-request-protection/reset | Owner; clears access-request throttle state only |
 | GET /api/owner/access-requests | Owner; up to 100 recent records |
 | POST /api/owner/access-requests/:id/approve | Owner; pending requests only |
 | POST /api/owner/access-requests/:id/deny | Owner; pending requests only |
@@ -57,7 +59,7 @@ Policy: two active sessions, 180 minutes from session creation, five successful 
 
 Tokens cannot be minted for expired sessions and their TTL is capped at the room deadline. An independent five-second backend sweep deletes expired LiveKit rooms, disconnecting existing media, and retries failed deletions. Expired rooms continue occupying capacity until cleanup succeeds. Room deletion depends on LiveKit being reachable; token expiry alone does not disconnect an already-connected participant.
 
-Requests: five attempts per IP per hour and 30 global attempts per hour, plus no duplicate pending/approved request and a five-minute browser cooldown for another request. Creation of requests and push attempts is bounded together. Login: five failed attempts per IP per 15-minute window; successful requests are excluded. An additional global 50-attempt/15-minute ceiling bounds bcrypt work, including rotating-IP attacks. Rate limits operate in tests as well as production.
+Requests: only new records count, with fixed ten-minute windows of five per browser identity, 120 per effective IP and 300 globally. Pending/approved retries reuse the existing record and do not send push again. Polling does not consume creation limits. Owner can reset only access-request throttle state from Access Request Protection; pending requests, approvals and sessions remain intact. The former hourly request environment settings are no longer used. Creation of requests and push attempts is bounded together. Login: five failed attempts per IP per 15-minute window; successful requests are excluded. An additional global 50-attempt/15-minute ceiling bounds bcrypt work, including rotating-IP attacks. Rate limits operate in tests as well as production.
 
 `TRUST_PROXY` defaults to empty (no trust of forwarded headers). It accepts only a comma-separated list of proxy IPs/CIDRs understood by Express; configure verified infrastructure ranges, never `true` or an arbitrary hop count. With no trusted proxy, users behind the Render/Vercel proxy share an IP bucket: conservative protection, potentially inconvenient. This cannot be resolved safely by guessing provider ranges. Verify the actual proxy path before configuring it. Limits and persistence are single-process: run one backend instance.
 
@@ -99,8 +101,6 @@ OWNER_SESSION_TTL_HOURS=12
 OWNER_REMEMBER_ME_DAYS=30
 VISITOR_ACCESS_TTL_HOURS=12
 ACCESS_REQUEST_TTL_MINUTES=30
-ACCESS_REQUEST_MAX_PER_HOUR=5
-ACCESS_REQUEST_GLOBAL_MAX_PER_HOUR=30
 OWNER_MAX_FAILED_LOGIN_ATTEMPTS=5
 OWNER_LOGIN_LOCKOUT_MINUTES=15
 DEMO_MAX_SESSION_CREATIONS_PER_ACCESS=5

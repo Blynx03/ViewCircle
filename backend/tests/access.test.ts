@@ -7,6 +7,7 @@ import webpush from 'web-push';
 import { app } from '../src/app.js';
 import { env } from '../src/config/env.js';
 import { memoryAccessStore as accessStore } from '../src/access/store.js';
+import { accessRequestProtection, ACCESS_REQUEST_LIMITS } from '../src/access/protection.js';
 import { digest } from '../src/access/routes.js';
 import { notifyOwner } from '../src/access/push.js';
 import { sessionStore } from '../src/stores/session-store.js';
@@ -19,7 +20,7 @@ function approved() {
 }
 const subscription = { endpoint: 'https://web.push.apple.com/test', keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) } };
 beforeEach(async () => {
-  accessStore.clear(); sessionStore.clear(); vi.clearAllMocks();
+  accessStore.clear(); sessionStore.clear(); accessRequestProtection.reset(); vi.clearAllMocks();
   app.set('trust proxy', 'loopback'); // Explicit trusted local test proxy; production defaults to no trust.
   env.OWNER_USERNAME = 'test-owner'; env.OWNER_PASSWORD_HASH = await bcrypt.hash('test-only-password', 4); env.OWNER_SESSION_SECRET = 'test-only-session-secret-not-for-production';
   env.VAPID_PUBLIC_KEY = 'test-public'; env.VAPID_PRIVATE_KEY = 'test-private'; env.VAPID_SUBJECT = 'mailto:test@example.com';
@@ -105,7 +106,7 @@ describe('Visitor authorization and requests', () => {
     const visitor = client(); const admin = owner();
     const result = await visitor.post('/api/access-requests').send({ name: 'John', emailOrCompany: 'Company' });
     expect(result.status).toBe(201); const id = result.body.data.id as string;
-    expect((await visitor.post('/api/access-requests').send({ name: 'Again' })).status).toBe(429);
+    expect((await visitor.post('/api/access-requests').send({ name: 'Again' })).body.data).toMatchObject({ id, status: 'pending' });
     expect((await client().get(`/api/access-requests/${id}/status`)).status).toBe(404);
     const pending = await visitor.get(`/api/access-requests/${id}/status`);
     expect(pending.body.data.status).toBe('pending'); expect(JSON.stringify(pending.body)).not.toMatch(/John|Company|browserHash/);
@@ -133,10 +134,17 @@ describe('Visitor authorization and requests', () => {
       expect((await visitor.post('/api/sessions').send({ hostName: 'Test' })).status).toBe(403);
     }
   });
-  it('limits public requests even when the browser clears its cookies', async () => {
-    const agent = client();
-    for (let i = 0; i < 5; i++) await agent.post('/api/access-requests').send({ name: '' });
-    expect((await agent.post('/api/access-requests').send({ name: 'Test' })).status).toBe(429);
+  it('counts only valid new requests and protects a shared IP when cookies are cleared', async () => {
+    const address = '198.51.100.7';
+    const submit = (name: string) => request(app).post('/api/access-requests').set('X-ViewCircle-Request', '1').set('X-Forwarded-For', address).send({ name });
+    for (let i = 0; i < 6; i++) expect((await submit('')).status).toBe(400);
+    expect(accessRequestProtection.status().newRequests).toBe(0);
+    for (let i = 0; i < ACCESS_REQUEST_LIMITS.ip; i++) expect((await submit('New browser')).status).toBe(201);
+    const blocked = await submit('New browser');
+    expect(blocked.status).toBe(429); expect(blocked.body.error.code).toBe('ACCESS_REQUEST_THROTTLED');
+    expect(blocked.body.error.retryAfterSeconds).toBeGreaterThan(0);
+    expect(Number(blocked.headers['retry-after'])).toBe(blocked.body.error.retryAfterSeconds);
+    expect(accessRequestProtection.status().newRequests).toBe(ACCESS_REQUEST_LIMITS.ip);
   });
   it('enforces atomic active-room and per-access creation limits', async () => {
     const visitor = approved();
@@ -199,4 +207,92 @@ it('worker-style mutations still require Owner cookies, CSRF and pending state',
   expect((await admin.set('Origin', 'https://evil.example').post(path)).status).toBe(403);
   expect((await admin.set('Origin', env.CLIENT_URL).set('Sec-Fetch-Site', 'same-origin').post(path)).status).toBe(200);
   expect((await admin.post(path)).status).toBe(409);
+});
+
+it('bootstraps an HttpOnly identity and deduplicates concurrent/lost-response retries without extra pushes or counts', async () => {
+  accessStore.subscriptions.set('device', subscription);
+  const browser = client(); const boot = await browser.get('/api/access');
+  expect(boot.headers['set-cookie']?.[0]).toContain('HttpOnly');
+  const results = await Promise.all(Array.from({ length: 8 }, () => client().set('Cookie', boot.headers['set-cookie']![0]!.split(';')[0]!).post('/api/access-requests').send({ name: 'Host' })));
+  expect(results.filter(result => result.status === 201)).toHaveLength(1);
+  expect(new Set(results.map(result => result.body.data.id as string)).size).toBe(1);
+  expect(accessStore.requests.size).toBe(1); expect(accessRequestProtection.status().newRequests).toBe(1);
+  expect(webpush.sendNotification).toHaveBeenCalledOnce();
+  const id = results[0]!.body.data.id as string;
+  for (let i = 0; i < 35; i++) {
+    expect((await browser.post('/api/access-requests').send({})).body.data).toMatchObject({ id, status: 'pending', message: 'Your access request is already waiting for approval.' });
+    expect((await browser.get(`/api/access-requests/${id}/status`)).status).toBe(200);
+  }
+  await owner().post(`/api/owner/access-requests/${id}/approve`);
+  const expires = accessStore.requests.get(id)!.expiresAt;
+  expect((await browser.post('/api/access-requests').send({})).body.data).toMatchObject({ id, status: 'approved', message: 'Access already granted.' });
+  expect(accessStore.requests.get(id)!.expiresAt).toBe(expires);
+  expect(accessRequestProtection.status().newRequests).toBe(1);
+  // Existing approval survives room end and can create another room, with usage retained.
+  const first = await browser.post('/api/sessions').send({ hostName: 'Host' });
+  expect(first.status).toBe(201);
+  expect((await browser.post(`/api/sessions/${first.body.data.roomCode}/end`)).status).toBe(200);
+  expect((await browser.post('/api/sessions').send({ hostName: 'Host' })).status).toBe(201);
+  expect(accessStore.requests.get(id)!.creations).toBe(2);
+});
+it('denied, expired and cleared workflows can retry immediately, while repeated new workflows eventually throttle', async () => {
+  const browser = client(); const admin = owner();
+  for (let i = 0; i < ACCESS_REQUEST_LIMITS.browser; i++) {
+    const result = await browser.post('/api/access-requests').send({ name: 'Host' });
+    expect(result.status).toBe(201);
+    const item = accessStore.requests.get(result.body.data.id as string)!;
+    if (i === 0) await admin.post(`/api/owner/access-requests/${item.id}/deny`);
+    else if (i === 1) item.expiresAt = Date.now() - 1;
+    else accessStore.requests.delete(item.id);
+  }
+  expect((await browser.post('/api/access-requests').send({ name: 'Host' })).status).toBe(429);
+  expect((await admin.post('/api/owner/access-request-protection/reset')).status).toBe(200);
+  expect((await browser.post('/api/access-requests').send({ name: 'Host' })).status).toBe(201);
+});
+it('global creation protection cannot block reuse, and Owner reset preserves workflow, rooms, usage and login lockout', async () => {
+  const pending = client(); const pendingResult = await pending.post('/api/access-requests').send({ name: 'Pending' });
+  const authorized = approved(); const admin = owner();
+  const room = await authorized.post('/api/sessions').send({ hostName: 'Host' }); expect(room.status).toBe(201);
+  const approval = accessStore.requests.get('approved')!;
+  const ownerState = accessStore.owners.get(digest('owner-test'))!; ownerState.creations = 3;
+  const blockedLogin = client();
+  for (let i = 0; i < 5; i++) expect((await blockedLogin.post('/api/owner/login').send({ username: 'test-owner', password: 'wrong' })).status).toBe(401);
+  for (let i = 1; i < ACCESS_REQUEST_LIMITS.global; i++) accessRequestProtection.consume(`browser-${i}`, `ip-${i}`);
+  const blocked = client(); const failure = await blocked.post('/api/access-requests').send({ name: 'Blocked' });
+  expect(failure.status).toBe(429); expect(failure.body.error.retryAfterSeconds).toBeGreaterThan(0);
+  expect((await pending.post('/api/access-requests').send({})).body.data.id).toBe(pendingResult.body.data.id);
+  expect((await authorized.post('/api/access-requests').send({})).body.data.status).toBe('approved');
+  const status = await admin.get('/api/owner/access-request-protection');
+  expect(status.body.data.lastThrottledAt).toBeGreaterThan(0);
+  expect(Object.keys(status.body.data as Record<string, unknown>).sort()).toEqual(['browserBuckets', 'ipBuckets', 'lastThrottledAt', 'newRequests']);
+  const reset = await admin.post('/api/owner/access-request-protection/reset');
+  expect(reset.body.data).toEqual({ browserBuckets: 0, ipBuckets: 0, lastThrottledAt: null, newRequests: 0 });
+  expect(accessStore.requests.get(pendingResult.body.data.id as string)?.status).toBe('pending');
+  expect(accessStore.requests.get('approved')).toBe(approval); expect(approval.creations).toBe(1);
+  expect(ownerState.creations).toBe(3); expect((await admin.get('/api/access')).body.data.owner).toBe(true);
+  expect(sessionStore.all()).toHaveLength(1); expect(sessionStore.all()[0]!.status).not.toBe('ENDED');
+  expect((await blocked.post('/api/access-requests').send({ name: 'Blocked' })).status).toBe(201);
+  expect((await blockedLogin.post('/api/owner/login').send({ username: 'test-owner', password: 'test-only-password' })).status).toBe(429);
+});
+it('protects reset/status with Owner authentication and existing CSRF/source rules', async () => {
+  const path = '/api/owner/access-request-protection/reset';
+  expect((await client().post(path)).status).toBe(401);
+  expect((await approved().post(path)).status).toBe(401);
+  expect((await client().get('/api/owner/access-request-protection')).status).toBe(401);
+  expect((await owner().post(path).unset('X-ViewCircle-Request')).status).toBe(403);
+  expect((await owner().set('Origin', 'https://evil.example').post(path)).status).toBe(403);
+  expect((await owner().set('Sec-Fetch-Site', 'cross-site').post(path)).status).toBe(403);
+});
+it('does not trust spoofed forwarding headers when proxy trust is disabled', async () => {
+  app.set('trust proxy', false);
+  for (let i = 0; i < 8; i++) expect((await client().post('/api/access-requests').send({ name: 'Host' })).status).toBe(201);
+  expect(accessRequestProtection.status().ipBuckets).toBe(1);
+});
+
+it('does not adopt an arbitrary caller-chosen browser identity', async () => {
+  const chosen = 'attacker-chosen-cookie';
+  const result = await client().set('Cookie', `vc_visitor=${chosen}`).post('/api/access-requests').send({ name: 'Host' });
+  expect(result.status).toBe(201);
+  expect(accessStore.requests.get(result.body.data.id as string)!.browserHash).not.toBe(digest(chosen));
+  expect((await client().set('Cookie', `vc_visitor=${chosen}`).get('/api/access')).body.data.request).toBeNull();
 });

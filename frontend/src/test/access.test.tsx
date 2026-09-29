@@ -4,10 +4,11 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { accessApi } from '../api/access';
 import { AccessGate } from '../components/AccessGate';
 import { OwnerPage } from '../pages/OwnerPage';
-vi.mock('../api/access', () => ({ accessApi: { status: vi.fn(), ask: vi.fn(), list: vi.fn(), login: vi.fn(), logout: vi.fn(), decide: vi.fn(), pushKey: vi.fn(), subscribe: vi.fn() } }));
+vi.mock('../api/access', () => ({ accessApi: { protection: vi.fn(), resetProtection: vi.fn(), status: vi.fn(), ask: vi.fn(), list: vi.fn(), login: vi.fn(), logout: vi.fn(), decide: vi.fn(), pushKey: vi.fn(), subscribe: vi.fn() } }));
 const unauthorized = { authorized: false, owner: false, request: null };
 beforeEach(() => {
   vi.resetAllMocks(); vi.mocked(accessApi.status).mockResolvedValue(unauthorized);
+  vi.mocked(accessApi.protection).mockResolvedValue({ browserBuckets: 0, ipBuckets: 0, newRequests: 0, lastThrottledAt: null });
   vi.mocked(accessApi.list).mockResolvedValue([]); vi.mocked(accessApi.pushKey).mockResolvedValue({ publicKey: null });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -121,4 +122,48 @@ it('notification context highlights a request but never authorizes or auto-submi
   expect(accessApi.decide).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
   await waitFor(() => expect(accessApi.decide).toHaveBeenCalledWith(id, 'approve'));
+});
+
+it('shows structured access retry duration and allows retry without a frontend cooldown', async () => {
+  vi.mocked(accessApi.ask).mockRejectedValue(Object.assign(new Error('Too many access requests were received. Please contact the Owner or try again shortly.'), { retryAfterSeconds: 91 }));
+  render(<AccessGate><p>Protected</p></AccessGate>);
+  fireEvent.change(await screen.findByLabelText('Your Name'), { target: { value: 'Host' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Request Access' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Try again in about 2 minutes.');
+  expect(screen.getByRole('button', { name: 'Request Access' })).toBeEnabled();
+});
+it('an already-approved submission proceeds to creation with its approval message', async () => {
+  vi.mocked(accessApi.ask).mockResolvedValue({ id: 'one', status: 'approved', message: 'Access already granted.' });
+  render(<AccessGate><p>Create Room</p></AccessGate>);
+  fireEvent.change(await screen.findByLabelText('Your Name'), { target: { value: 'Host' } });
+  vi.mocked(accessApi.status).mockResolvedValue({ authorized: true, owner: false, request: null });
+  fireEvent.click(screen.getByRole('button', { name: 'Request Access' }));
+  expect(await screen.findByText('Create Room')).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('Access already granted.');
+});
+it('Owner reset requires confirmation, reports success and keeps pending requests visible', async () => {
+  vi.mocked(accessApi.status).mockResolvedValue({ ...unauthorized, owner: true, authorized: true });
+  vi.mocked(accessApi.list).mockResolvedValue([{ id: 'one', name: 'Pending Host', status: 'pending', createdAt: Date.now(), expiresAt: Date.now() + 60000 }]);
+  vi.mocked(accessApi.resetProtection).mockResolvedValue({ browserBuckets: 0, ipBuckets: 0, newRequests: 0, lastThrottledAt: null });
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  try {
+    render(<MemoryRouter><OwnerPage /></MemoryRouter>);
+    const reset = await screen.findByRole('button', { name: 'Reset Access Request Limits' });
+    fireEvent.click(reset); expect(accessApi.resetProtection).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true); fireEvent.click(reset);
+    expect(confirm).toHaveBeenCalledWith('Reset access request limits?\n\nThis allows blocked Hosts to request access again immediately.');
+    expect(await screen.findByText('Access request limits reset. Hosts can request access again.')).toBeVisible();
+    expect(accessApi.resetProtection).toHaveBeenCalledOnce(); expect(screen.getByText('Pending Host')).toBeVisible();
+  } finally { confirm.mockRestore(); }
+});
+it('Owner reset reports failure and remains available for retry', async () => {
+  vi.mocked(accessApi.status).mockResolvedValue({ ...unauthorized, owner: true, authorized: true });
+  vi.mocked(accessApi.resetProtection).mockRejectedValue(new Error('Could not reset limits.'));
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  try {
+    render(<MemoryRouter><OwnerPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset Access Request Limits' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not reset limits.');
+    expect(screen.getByRole('button', { name: 'Reset Access Request Limits' })).toBeEnabled();
+  } finally { confirm.mockRestore(); }
 });

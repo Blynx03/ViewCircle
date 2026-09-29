@@ -6,11 +6,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   finally { clearTimeout(timer); }
 }
 export interface AccessStatus { requestorName?: string; authorized: boolean; owner: boolean; expiresAt?: number; request: { id: string; status: string; expiresAt: number } | null }
+export interface AccessProtection { browserBuckets: number; ipBuckets: number; newRequests: number; lastThrottledAt: number | null }
 export interface AccessItem { id: string; name: string; emailOrCompany?: string; status: string; createdAt: number; expiresAt: number }
 const post = (body?: unknown): RequestInit => ({ method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) });
 export const accessApi = {
+  protection: () => request<AccessProtection>('/owner/access-request-protection'),
+  resetProtection: () => request<AccessProtection>('/owner/access-request-protection/reset', post()),
   status: () => request<AccessStatus>('/access'),
-  ask: (name: string, emailOrCompany: string) => request<{ id: string; status: string }>('/access-requests', post({ name, emailOrCompany })),
+  ask: (name: string, emailOrCompany: string) => request<{ id?: string; status: string; message?: string }>('/access-requests', post({ name, emailOrCompany })),
   poll: (id: string) => request<{ status: string }>(`/access-requests/${encodeURIComponent(id)}/status`),
   login: (username: string, password: string, rememberMe: boolean) => request('/owner/login', post({ username, password, rememberMe })),
   logout: () => request('/owner/logout', post()),

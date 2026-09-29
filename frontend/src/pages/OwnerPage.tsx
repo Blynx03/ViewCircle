@@ -4,7 +4,7 @@ import { timeLeft, sessionLabel } from '../utilities/session-status';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { decodePushKey, subscriptionMatchesKey, readyServiceWorker } from '../utilities/push';
-import { accessApi, type AccessItem } from '../api/access';
+import { accessApi, type AccessItem, type AccessProtection } from '../api/access';
 
 export function OwnerPage() {
   const { hash } = useLocation();
@@ -20,6 +20,8 @@ export function OwnerPage() {
   const [error, setError] = useState(''); const [items, setItems] = useState<AccessItem[]>([]);
   const [filter, setFilter] = useState('pending'); const [push, setPush] = useState('');
   const [pushKey, setPushKey] = useState<string | null>(null);
+  const [protection, setProtection] = useState<AccessProtection | null>(null);
+  const [resetMessage, setResetMessage] = useState('');
   const [enabled, setEnabled] = useState(false);
   useEffect(() => { let active = true; void accessApi.status().then(value => { if (active) setOwner(value.owner); }).catch(() => { if (active) { setOwner(false); setError('Could not check Owner session.'); } }); return () => { active = false; }; }, []);
   useEffect(() => {
@@ -27,7 +29,7 @@ export function OwnerPage() {
     setEnabled(false); setPush('');
     let active = true; let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
-      try { const result = await accessApi.list(); if (active) setItems(result); const rooms = await request<{ sessions: PublicSession[] }>('/owner/sessions'); if (active) setSessions(rooms.sessions); }
+      try { const result = await accessApi.list(); if (active) setItems(result); const rooms = await request<{ sessions: PublicSession[] }>('/owner/sessions'); if (active) setSessions(rooms.sessions); const limits = await accessApi.protection(); if (active) setProtection(limits); }
       catch (reason) { if (active) { setError((reason as Error).message); if ((reason as { code?: string }).code === 'OWNER_REQUIRED') setOwner(false); } }
       finally { if (active) timer = setTimeout(() => void refresh(), 5000); }
     };
@@ -84,6 +86,16 @@ export function OwnerPage() {
       <section className="owner-sessions card form-card"><h2>Session Management</h2><p className="session-capacity">Active Sessions <strong>{sessions.length} of 2</strong></p>
         {sessions.map(s => <article className="owner-session" key={s.roomCode}><h3>{s.sessionName || s.roomCode}</h3><p>Room {s.roomCode} · {s.visibility === 'public' ? 'Public' : 'Private'} · {sessionLabel(s)}</p><p>Host {s.hostConnected ? 'connected' : 'disconnected'} · {s.guestCount} Guests · {s.pendingRequests ?? 0} pending requests</p><p>Started {s.createdAt ? new Date(s.createdAt).toLocaleString() : '—'} · Time Left: {s.expiresAt ? timeLeft(s.expiresAt) : '—'}</p><button className="button button-danger" disabled={busy} onClick={() => void mutate(`/owner/sessions/${s.roomCode}/end`, 'End this session and disconnect everyone?')}>End Session</button></article>)}
         <div className="owner-actions"><button className="button button-danger" disabled={busy || sessions.length === 0} onClick={() => void mutate('/owner/sessions/end-all', 'End all active sessions and disconnect everyone?')}>End All Sessions</button><button className="button" disabled={busy} onClick={() => void mutate('/owner/reset-creations', 'Reset session-creation usage for all current Host authorizations?')}>Reset Host Creation Usage</button></div>
+      </section>
+      <section className="card form-card" aria-label="Access Request Protection"><h2>Access Request Protection</h2>
+        <p>{protection ? protection.lastThrottledAt ? `Last blocked access request: ${new Date(protection.lastThrottledAt).toLocaleString()}` : 'No access requests throttled since the last reset or restart.' : 'Protection status unavailable.'}</p>
+        <p>Reset limits to let blocked Hosts request access again. Pending requests, approvals, and active sessions are kept.</p>
+        <button className="button" disabled={busy} onClick={() => {
+          if (!window.confirm('Reset access request limits?\n\nThis allows blocked Hosts to request access again immediately.')) return;
+          setBusy(true); setError(''); setResetMessage('');
+          void accessApi.resetProtection().then(value => { setProtection(value); setResetMessage('Access request limits reset. Hosts can request access again.'); }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false));
+        }}>Reset Access Request Limits</button>
+        {resetMessage && <p role="status">{resetMessage}</p>}
       </section>
       <p role="status">{push}</p>
       {enabled ? <button className="button" disabled={busy} onClick={() => {
