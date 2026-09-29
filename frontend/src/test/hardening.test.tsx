@@ -120,3 +120,31 @@ it.each(['public', 'private'] as const)('prefills the approved name and submits 
   fireEvent.click(screen.getByRole('button', { name: 'CREATE SESSION' }));
   await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ hostName: 'Edited Host', visibility }));
 });
+
+it.each(['public', 'private'] as const)('carries fresh approval into %s creation and preserves edits across access refresh', async visibility => {
+  vi.useFakeTimers();
+  vi.mocked(accessApi.status).mockResolvedValue({ owner: false, authorized: false, request: { id: 'one', status: 'pending', expiresAt: Date.now() + 60000 } });
+  vi.mocked(api.createSession).mockResolvedValue(base);
+  render(<MemoryRouter><AccessGate><CreateHostPage /></AccessGate></MemoryRouter>);
+  await act(async () => { await Promise.resolve(); });
+  vi.mocked(accessApi.status).mockResolvedValue({ owner: false, authorized: true, requestorName: 'Charlie', request: { id: 'one', status: 'approved', expiresAt: Date.now() + 3600000 } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(screen.getByLabelText('Your Name')).toHaveValue('Charlie');
+  if (visibility === 'private') fireEvent.click(screen.getByRole('checkbox'));
+  expect(screen.getByLabelText('Your Name')).toHaveValue('Charlie');
+  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Charles' } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+  expect(screen.getByLabelText('Your Name')).toHaveValue('Charles');
+  fireEvent.click(screen.getByRole('button', { name: 'CREATE SESSION' }));
+  await act(async () => { await Promise.resolve(); });
+  expect(api.createSession).toHaveBeenCalledWith({ hostName: 'Charles', visibility });
+});
+it.each([false, true])('reopening Create Room restores the approved name with Owner cookie = %s', async owner => {
+  vi.mocked(accessApi.status).mockResolvedValue({ owner, authorized: true, requestorName: 'Charlie', request: null });
+  const view = render(<MemoryRouter><AccessGate><CreateHostPage /></AccessGate></MemoryRouter>);
+  await waitFor(() => expect(screen.getByLabelText('Your Name')).toHaveValue('Charlie'));
+  fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Charles' } });
+  view.unmount();
+  render(<MemoryRouter><AccessGate><CreateHostPage /></AccessGate></MemoryRouter>);
+  await waitFor(() => expect(screen.getByLabelText('Your Name')).toHaveValue('Charlie'));
+});

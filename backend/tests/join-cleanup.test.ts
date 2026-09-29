@@ -58,3 +58,25 @@ it.each(['public', 'private'] as const)('uses an edited Host name for %s media c
   expect((await host.post(`/api/sessions/${code}/host-token`)).status).toBe(200);
   expect(createMediaToken).toHaveBeenCalledWith(expect.objectContaining({ name: 'Edited Charlie', role: 'host' }));
 });
+it('keeps the approved requester name when the browser also has Owner authorization', async () => {
+  authorized();
+  memoryAccessStore.owners.set(digest('owner'), { expiresAt: Date.now() + 60_000, creations: 0 });
+  const result = await client().set('Cookie', 'vc_visitor=visitor; vc_owner=owner').get('/api/access');
+  expect(result.body.data).toMatchObject({ owner: true, authorized: true, requestorName: 'Charlie' });
+});
+it('retains the original requester name across pending reuse, approval, approved reuse and limit reset', async () => {
+  const host = client();
+  const created = await host.post('/api/access-requests').send({ name: 'Charlie' });
+  const id = created.body.data.id as string;
+  expect((await host.post('/api/access-requests').send({ name: 'Other name' })).body.data.id).toBe(id);
+  expect(memoryAccessStore.requests.get(id)!.name).toBe('Charlie');
+  memoryAccessStore.owners.set(digest('owner'), { expiresAt: Date.now() + 60_000, creations: 0 });
+  const owner = client().set('Cookie', 'vc_owner=owner');
+  expect((await owner.post(`/api/owner/access-requests/${id}/approve`)).status).toBe(200);
+  const fresh = (await host.get('/api/access')).body.data as { requestorName: string };
+  expect(fresh.requestorName).toBe('Charlie');
+  expect((await host.post('/api/access-requests').send({ name: 'Other name' })).body.data.status).toBe('approved');
+  expect((await owner.post('/api/owner/access-request-protection/reset')).status).toBe(200);
+  expect((await host.get('/api/access')).body.data).toEqual(fresh);
+  expect(memoryAccessStore.requests.get(id)!.name).toBe('Charlie');
+});
