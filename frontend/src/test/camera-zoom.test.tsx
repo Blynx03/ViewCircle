@@ -148,3 +148,13 @@ describe('Host zoom interaction', () => {
     expect(screen.queryByRole('group')).not.toBeInTheDocument(); view.unmount(); expect(vi.getTimerCount()).toBe(0);
   });
 });
+it('appears after publication and delayed camera settings become available', async () => {
+  const { native, track } = camera(); let current: MediaStreamTrack | null = null;
+  const settings = track.getSettings.getMockImplementation()!;
+  track.getSettings.mockReturnValue({ deviceId:'rear' } as ReturnType<typeof settings>);
+  const view = render(<HostCameraZoom getTrack={() => current} />);
+  current = native; await flush(250); expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  track.getSettings.mockImplementation(settings); await flush(250);
+  expect(screen.getByRole('group', { name:'Host camera zoom' })).toBeVisible();
+  view.unmount();
+});

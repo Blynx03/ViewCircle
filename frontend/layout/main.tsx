@@ -1,3 +1,4 @@
+import { LiveViewport } from '../src/components/LiveViewport';
 import { SessionChat } from '../src/components/SessionChat';
 import type { Room } from 'livekit-client';
 import { PrivateGuestShare } from '../src/components/PrivateGuestShare';
@@ -28,7 +29,7 @@ const getCamera = () => query.get('zoom') === 'supported' ? camera : null;
 function Fixture() {
   const [gesture, setGesture] = useState(false);
   const [restore, setRestore] = useState(0);
-  return <main className={`live-page ${host && query.has('status') ? 'host-live' : host ? '' : 'guest-live'}`}>
+  return <LiveViewport className={`live-page ${host && query.has('status') ? 'host-live' : host ? '' : 'guest-live'}`}>
   {host && query.has('status') ? <><HostRoomHeader roomCode="AB7K" people={11} connection="Connected" connected /><SessionLifecycle code="AB7K" host /></> : <header className={`live-header ${variant === 'private' ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">11 people</span>{variant === 'private' && <PrivateGuestShare code="AB7K" />}<span className="connection">Reconnecting…</span></header>}
   {host ? <section className="video-stage"><video className="host-video" /><HostCameraZoom getTrack={getCamera} />{query.has('chat') && <SessionChat roomRef={chatRoom} connection="connected" />}</section>
     : <GuestVideoViewport sessionKey="layout" onTap={() => setRestore(value => value + 1)} onInteraction={setGesture}><video className="host-video" /></GuestVideoViewport>}
@@ -45,6 +46,6 @@ function Fixture() {
   </nav> : <GuestControls panelOpen={gesture} restoreSignal={restore} micOn={variant === 'active'} micBusy={variant === 'busy'} soundOn={variant === 'active'}
     iosStandalone={variant === 'safari'} pipSupported={variant !== 'hidden'} pipActive={variant === 'return'} hasVideo
     onMic={noop} onSound={noop} onPip={noop} onSafari={noop} onPeople={noop} onLeave={noop} />}
-</main>;
+</LiveViewport>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

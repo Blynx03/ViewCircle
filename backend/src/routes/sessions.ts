@@ -1,3 +1,4 @@
+import { forgetGuest, recoverableGuest, rememberGuest } from '../services/guest-recovery.js';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { createSecret, hashAuthority } from '../utilities/security.js';
@@ -26,6 +27,20 @@ const accessKey = (access: AccessIdentity) => access.kind === 'owner' ? 'owner:p
 const activeFor = (access: AccessIdentity) => sessionStore.all().find(s => s.status !== 'ENDED' && s.accessKey === accessKey(access));
 const creations = new Set<string>();
 const admissions = new Map<string, Promise<{ token: string; identity: string }>>();
+router.get('/guest-recovery', limiter(600), async (request, response) => {
+  const recovered = await recoverableGuest(request, response);
+  if (!recovered) { response.json({ success: true, data: null }); return; }
+  const { credentials: _credentials, ...context } = recovered;
+  void _credentials;
+  response.json({ success: true, data: context });
+});
+router.post('/guest-recovery', limiter(20), async (request, response) => {
+  const recovered = await recoverableGuest(request, response);
+  response.json({ success: true, data: recovered });
+});
+router.post('/guest-recovery/dismiss', limiter(60), (_request, response) => {
+  forgetGuest(response); response.json({ success: true, data: {} });
+});
 router.get('/active', requireAccess, async (_request, response) => {
   const session = activeFor(response.locals.access as AccessIdentity);
   if (session) await reconcileSession(session);
@@ -100,6 +115,7 @@ router.post('/:roomCode/requests/:id/status', limiter(600), async (request, resp
     try { item.credentials = await issuing; } finally { admissions.delete(item.id); }
   }
   if (['ENDED', 'EXPIRED'].includes(session.status)) throw new ServiceError('SESSION_ENDED', 'This session has ended.', 410);
+  if (item.credentials) rememberGuest(response, item.credentials.token, session.createdAt.getTime() + 180 * 60_000);
   response.json({ success: true, data: { status: item.status, ...(item.credentials ? { credentials: { ...item.credentials, livekitUrl: env.LIVEKIT_URL } } : {}) } });
 });
 router.post('/:roomCode/camera-state', limiter(60), async (request, response) => {
@@ -134,7 +150,9 @@ router.get('/:roomCode/public', limiter(600), async (request, response) => {
 router.post('/:roomCode/join', limiter(12), async (request, response) => {
   const { roomCode } = roomCodeSchema.parse(request.params);
   const input = joinSessionSchema.parse(request.body);
-  const result = await service.join(await service.requireSession(roomCode), input.name, input.pin);
+  const session = await service.requireSession(roomCode);
+  const result = await service.join(session, input.name, input.pin);
+  rememberGuest(response, result.token, session.createdAt.getTime() + 180 * 60_000);
   response.json({ success: true, data: { ...result, livekitUrl: env.LIVEKIT_URL } });
 });
 
@@ -177,6 +195,7 @@ router.post('/:roomCode/leave', limiter(60), async (request, response) => {
         claims.video?.room !== roomCode || claims.video.roomJoin !== true ||
         !session.guests.has(identity)) throw new Error('Wrong participation');
   } catch { throw new ServiceError('GUEST_UNAUTHORIZED', 'Guest authorization is required.', 403); }
+  forgetGuest(response);
   await sessionStore.update(roomCode, current => { const guest = current.guests.get(identity); if (guest) guest.removed = true; });
   try { await removeParticipant(roomCode, identity); } catch { /* Already disconnected; authoritative leave is retained. */ }
   response.json({ success: true, data: {} });

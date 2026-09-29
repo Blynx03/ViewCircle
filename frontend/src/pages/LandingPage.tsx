@@ -1,3 +1,4 @@
+import { GuestRejoin } from '../components/GuestRejoin';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { PublicSession } from '../types/session';
@@ -27,6 +28,7 @@ export function LandingPage() {
       <div className="logo-mark" aria-hidden="true"><span /></div>
       <h1>{BRAND.appName}</h1><p className="tagline">{BRAND.tagline}</p>
       {active && <section className="card form-card"><h2>You already have an active session.</h2><p>{active.sessionName || active.roomCode}</p><button className="button button-primary" disabled={busy} onClick={() => void recover(false)}>Rejoin Session</button><button className="button" disabled={busy} onClick={() => void recover(true)}>End It &amp; Start New</button>{error && <p role="alert">{error}</p>}</section>}
+      {!active && <GuestRejoin />}
       <nav className="role-actions" aria-label="Choose how to join">
         <Link className="role-card host-card" to="/host"><span className="role-icon">●</span><strong>HOST</strong><small>Share your camera</small></Link>
         <Link className="role-card" to="/join"><span className="role-icon">◉</span><strong>GUEST</strong><small>Watch and talk</small></Link>

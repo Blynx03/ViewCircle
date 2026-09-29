@@ -1,3 +1,4 @@
+import { LiveViewport } from '../components/LiveViewport';
 import { SessionChat } from '../components/SessionChat';
 import { PrivateGuestShare } from '../components/PrivateGuestShare';
 import { SessionLifecycle } from '../components/SessionLifecycle';
@@ -38,6 +39,7 @@ export function WatchPage() {
   useEffect(() => {
     if (live.sessionEnded || live.removed) {
       sessionStorage.removeItem(`vc_guest_${roomCode}`);
+      void api.dismissGuestRecovery().catch(() => {});
     }
   }, [live.sessionEnded, live.removed, roomCode]);
   const mic = async () => {
@@ -49,7 +51,7 @@ export function WatchPage() {
   };
   if (live.sessionEnded || live.removed) return <main className="ended-page"><SessionEnded removed={live.removed} /></main>;
   if (!credentials) return null;
-  return <main className="live-page guest-live"><header className={`live-header ${privateRoom === roomCode ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">{live.participants.length} people</span>{privateRoom === roomCode && <PrivateGuestShare key={roomCode} code={roomCode} />}<span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
+  return <LiveViewport className="live-page guest-live"><header className={`live-header ${privateRoom === roomCode ? 'guest-private-header' : ''}`}><strong>ViewCircle</strong><span className="live-badge">LIVE</span><span className="guest-people">{live.participants.length} people</span>{privateRoom === roomCode && <PrivateGuestShare key={roomCode} code={roomCode} />}<span className={`connection ${online && live.connection === 'connected' ? 'ok' : ''}`}>{!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection}</span></header>
     <SessionLifecycle code={roomCode} />
     <GuestVideoViewport sessionKey={`${roomCode}:${credentials.identity}`} onTap={() => setRestoreControls(value => value + 1)} onInteraction={setZoomInteraction}><video ref={live.videoRef} muted playsInline autoPlay className="host-video" />{!live.hasVideo && <WaitingForHost />}
       {(pip.message || live.mediaMessage) && <p className="lifecycle-message" role="status">{live.mediaMessage || pip.message}</p>}<div ref={live.audioContainerRef} className="audio-container" />
@@ -65,5 +67,5 @@ export function WatchPage() {
     {safariHelp && <SafariMultitaskingHelp roomCode={roomCode} guestName={local?.name ?? ''} close={() => setSafariHelp(false)} />}
     {drawer && <div className="sheet-backdrop" onClick={() => setDrawer(false)}><section className="bottom-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" onClick={() => setDrawer(false)}>Close</button><h2>In this circle — {live.participants.length}</h2><div className="guest-list">{live.participants.map((person) => <div key={person.identity}><span><strong>{person.name}</strong><small>{person.speaking ? 'Speaking' : person.micOn ? 'Mic On' : 'Muted'}</small></span></div>)}</div></section></div>}
     {micHelp && <PermissionHelp kind="microphone" guest busy={micBusy} retry={() => void mic()} close={() => setMicHelp(false)} />}
-  </main>;
+  </LiveViewport>;
 }

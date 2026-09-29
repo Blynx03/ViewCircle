@@ -86,3 +86,15 @@ it('fades aging messages without removing them from review', () => {
     chat.unmount();
   } finally { vi.useRealTimers(); }
 });
+it('counts arrivals below an open review position and clears on jump or manual return', async () => {
+  const chat = fixture(); await userEvent.click(screen.getByRole('button'));
+  const list = screen.getByRole('log');
+  Object.defineProperties(list, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
+  list.scrollTop = 100; fireEvent.scroll(list); chat.incoming('First'); chat.incoming('Second');
+  expect(list.scrollTop).toBe(100);
+  await userEvent.click(screen.getByRole('button', { name: '↓ 2 new messages' }));
+  expect(list.scrollTop).toBe(1000); expect(screen.queryByRole('button', { name: /new message/ })).not.toBeInTheDocument();
+  list.scrollTop = 100; fireEvent.scroll(list); chat.incoming('Third');
+  expect(screen.getByRole('button', { name: '↓ 1 new message' })).not.toHaveClass('has-unread');
+  list.scrollTop = 800; fireEvent.scroll(list); expect(screen.queryByRole('button', { name: /new message/ })).not.toBeInTheDocument();
+});

@@ -12,7 +12,11 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload.data;
 }
 
+export interface GuestRecovery { roomCode: string; name: string; identity: string; expiresAt: number }
 export const api = {
+  guestRecovery: () => request<GuestRecovery | null>('/sessions/guest-recovery'),
+  rejoinGuest: () => request<(GuestRecovery & { credentials: Credentials }) | null>('/sessions/guest-recovery', { method: 'POST' }),
+  dismissGuestRecovery: () => request('/sessions/guest-recovery/dismiss', { method: 'POST' }),
   cameraState: (code: string, available: boolean) => request(`/sessions/${code}/camera-state`, { method: 'POST', body: JSON.stringify({ available }) }),
   active: () => request<PublicSession | null>('/sessions/active'),
   recover: () => request<PublicSession>('/sessions/recover', { method: 'POST' }),

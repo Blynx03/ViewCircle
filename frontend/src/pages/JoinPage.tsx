@@ -1,3 +1,4 @@
+import { GuestRejoin } from '../components/GuestRejoin';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
@@ -85,6 +86,7 @@ export function JoinPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not join this session.'); } finally { setBusy(false); }
   };
   return <AppLayout><section className="form-page"><div className="form-heading"><span className="eyebrow">JOIN AS A GUEST</span><h1>Enter the circle</h1><p>You’ll join muted. Turn your mic on whenever you’re ready.</p></div>
+    <GuestRejoin />
     <form className="card form-card" onSubmit={event => void submit(event)}>
       <TextField label="Your Name" value={name} onChange={event => setName(event.target.value)} onInput={event => setName(event.currentTarget.value)} maxLength={40} required autoComplete="name" />
       {waiting ? <div role="status"><p>Waiting for the Host to allow you…</p><button type="button" className="button" onClick={() => { void api.requestStatus(waiting.roomCode, waiting.id, waiting.secret, true).catch(() => undefined); setWaiting(null); }}>Cancel Request</button></div> : <>

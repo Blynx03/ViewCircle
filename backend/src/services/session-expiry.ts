@@ -31,7 +31,7 @@ export function lifecycleReason(session: Session, now: number): string | undefin
   if (session.everJoined && session.aloneSince !== undefined && now >= session.aloneSince + 120_000) return 'All Guests have left.';
   if (!session.everJoined && now >= waitingDeadline(session)) return 'No Guests joined this session.';
 }
-export async function reconcileSession(session: Session, now = Date.now()): Promise<void> {
+export async function reconcileSession(session: Session, now = Date.now(), observedPresence?: Awaited<ReturnType<typeof roomPresence>>): Promise<void> {
   if (session.status === 'ENDED') return;
   if (session.status === 'EXPIRED' || now >= session.createdAt.getTime() + MAX_DURATION) {
     await endSession(session, lifecycleReason(session, now)); return;
@@ -47,7 +47,7 @@ export async function reconcileSession(session: Session, now = Date.now()): Prom
     session.pendingExtension = Math.max(session.pendingExtension ?? 0, Math.min(session.createdAt.getTime() + 600_000, now + 30_000) - base, 0);
   }
   try {
-    const participants = await roomPresence(session.roomCode);
+    const participants = observedPresence ?? await roomPresence(session.roomCode);
     if (['ENDED', 'EXPIRED'].includes(session.status)) return;
     const host = participants.find(p => p.identity === `host-${session.id}`);
     session.hostConnected = Boolean(host);

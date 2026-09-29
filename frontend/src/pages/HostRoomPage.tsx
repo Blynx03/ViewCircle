@@ -1,3 +1,4 @@
+import { LiveViewport } from '../components/LiveViewport';
 import { SessionChat } from '../components/SessionChat';
 import { guestInvitationUrl, copyGuestCode, shareGuestInvitation } from '../utilities/guest-invitation';
 import { HostRoomHeader } from '../components/HostRoomHeader';
@@ -149,10 +150,10 @@ function LiveHostView({ onEnded, roomCode, live, online, locked, drawer, setDraw
   };
   const toggleCamera = async () => { setMediaError(''); try { await live.toggleCamera(); } catch { setMediaError('Camera could not be changed. Check camera access and try again.'); } };
   const flipCamera = async () => { setMediaError(''); try { await live.flipCamera(); } catch { setMediaError('Another camera is not available. Your current camera remains connected.'); } };
-  return <main className="live-page host-live"><HostRoomHeader showCode={hasStarted} roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
+  return <LiveViewport className="live-page host-live"><HostRoomHeader showCode={hasStarted} roomCode={roomCode} people={guests.length + 1} connected={online && live.connection === 'connected'} connection={!online ? 'No internet' : live.connection === 'reconnecting' || live.connection === 'disconnected' ? 'Reconnecting…' : live.connection} />
     <SessionLifecycle code={roomCode} host onEnded={onEnded} mediaMessage={error || mediaError || live.mediaMessage} retryCamera={() => { void live.retryCamera().catch(() => setMediaError('Camera unavailable. Close other apps using the camera, then try again.')); }} />
     <section className="video-stage"><video ref={live.videoRef} muted playsInline className="host-video mirror-local" /><div ref={live.audioContainerRef} hidden />
-      {!live.audioBlocked && !live.mediaMessage && !error && !mediaError && <HostCameraZoom getTrack={getPublishedCamera} />}
+      <HostCameraZoom getTrack={getPublishedCamera} />
       {live.audioBlocked && <button className="tap-audio" onClick={() => void live.enableAudio()}>TAP TO HEAR SESSION</button>}
       <SessionChat key={roomCode} roomRef={live.roomRef} connection={live.connection} />
     </section>
@@ -172,5 +173,5 @@ function LiveHostView({ onEnded, roomCode, live, online, locked, drawer, setDraw
     </section></div>}
     {confirmEnd && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true"><h2>End this session?</h2><p>Everyone will be disconnected.</p><div><button className="button" onClick={() => setConfirmEnd(false)}>CANCEL</button><button className="button button-danger" disabled={busy} onClick={() => void end()}>{busy ? 'ENDING…' : 'END SESSION'}</button></div></div></div>}
     {micHelp && <PermissionHelp kind="microphone" busy={micBusy} retry={() => void toggleMic()} close={() => setMicHelp(false)} />}
-  </main>;
+  </LiveViewport>;
 }
