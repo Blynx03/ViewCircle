@@ -1,114 +1,188 @@
-# ViewCircle
+# 📹 ViewCircle — AI-Assisted Real-Time Video Application
 
-**Share your view. Stay connected.**  
-The Dreamer Project · by blynx03
+**ViewCircle** is a real-time full-stack video communication application created primarily through an AI-assisted development workflow. It allows a host to create a private live session and invite guests using a short room code.
 
-ViewCircle is a mobile-first private live experience: one Host broadcasts camera video while the Host and up to ten Guests talk over group audio. Guests are technically prevented from publishing video. There are no accounts and no media is recorded or stored.
+The host broadcasts live video and audio, while guests can watch the host and participate through voice communication. The application was designed with a mobile-first approach and supports desktop, tablet, and smartphone browsers.
 
-## Prerequisites
+![ViewCircle application preview](README-assets/viewcircle-title.png)
 
-- Node.js 20+
-- npm 10+
-- A free [LiveKit Cloud](https://cloud.livekit.io/) project, or a self-hosted LiveKit server
+ViewCircle demonstrates my ability to direct an AI coding agent throughout a complete software-development lifecycle. I defined the product requirements and expected behaviour, tested each iteration across devices, reproduced and documented defects, provided detailed feedback, and made the final product and user-experience decisions.
 
-## Local setup
+Codex generated most of the application code under my direction. The frontend uses React and Vite, while the backend uses Node.js and Express to manage secure room access and generate LiveKit access tokens. LiveKit Cloud provides the WebRTC infrastructure for real-time video and audio communication. I validated the application through hands-on testing and directed its deployment to Vercel and Render.
 
-1. Install packages:
+---
 
-   ```bash
-   npm install
-   ```
+## 📑 Table of Contents
 
-2. Copy `backend/.env.example` to `backend/.env` and fill in the three values shown by the LiveKit project settings:
+* [Features](#-features)
+* [Application Screens](#-application-screens)
+* [Technologies Used](#-technologies-used)
+* [Getting Started](#-getting-started)
+* [Project Links](#-project-links)
 
-   - `LIVEKIT_URL`: the WebSocket URL, such as `wss://project.livekit.cloud`
-   - `LIVEKIT_API_KEY`: server API key
-   - `LIVEKIT_API_SECRET`: server API secret
+---
 
-   Keep the key and secret only in the backend environment. Never prefix them with `VITE_` or put them in `frontend/.env`.
+## ✨ Features
 
-3. Start both applications:
+* Simple host and guest entry options from the landing page.
+* Private live sessions created using short and easy-to-share room codes.
+* Secure room access using server-generated LiveKit tokens.
+* Real-time host video and audio broadcasting through WebRTC.
+* Guest voice participation with microphone mute and unmute controls.
+* Guest camera publishing is prevented so the host remains the primary video broadcaster.
+* Host controls for selecting the front or rear camera on supported mobile devices.
+* Portrait and landscape viewing preference with session-level persistence.
+* Fullscreen viewing support on compatible browsers and devices.
+* Picture-in-Picture support when permitted by the device and browser.
+* Installed iOS detection with Safari guidance when Picture-in-Picture is unavailable in the installed web app.
+* Copy-session-link functionality that preserves the guest name and room code without including private credentials.
+* Foreground recovery when a guest returns to the application after switching apps.
+* Host-controlled session termination with a clear session-ended message for connected guests.
+* Responsive, mobile-first interface optimized for smartphones, tablets, and desktop browsers.
+* Progressive Web App support for installation on compatible devices.
+* Automated frontend and backend tests generated with AI assistance, complemented by hands-on testing across desktop and mobile devices.
 
-   ```bash
-   npm run dev
-   ```
+---
 
-4. Open `http://localhost:5173`. Choose **Host**, create a session, then use the separate **Enable Camera** and **Enable Microphone** actions. ViewCircle shows readiness immediately after the real browser permission succeeds. Start the session, open the displayed `/join/CODE` link in a second browser/device, and join as a Guest. Guests begin muted and only request microphone permission after **Turn Mic On** is tapped.
+## 📸 Application Screens
 
-Supabase is not needed for this single-instance MVP. The optional placeholders describe the planned shared-store seam; the application currently stores only short-lived metadata in memory. Restarting the API ends those sessions.
+- **Landing Page** — Simple entry point for starting a session as a host or joining an existing session as a guest.
 
-## Verification
+![ViewCircle landing page](README-assets/viewcircle-landing.png)
+
+The responsive landing page provides clearly separated host and guest actions.
+
+- **Host Setup** — Session creation interface for entering a host name and preparing a private room.
+
+![ViewCircle host setup](README-assets/viewcircle-host-setup.png)
+
+The host creates a live session and receives a short room code that can be shared with guests.
+
+- **Guest Join** — Streamlined interface for entering a display name and room code.
+
+![ViewCircle guest join page](README-assets/viewcircle-guest-join.png)
+
+Guests can join a live room using the code supplied by the host without creating a permanent account.
+
+- **Live Room** — Real-time video room where guests can watch and communicate with the host.
+
+![ViewCircle live video room](README-assets/viewcircle-room.png)
+
+The room displays the host video and provides low-latency audio communication through LiveKit Cloud.
+
+- **Session Controls** — Compact controls for microphone, camera selection, orientation, fullscreen, and session management.
+
+![ViewCircle session controls](README-assets/viewcircle-controls.png)
+
+The controls provide quick access to important session features while preserving space for the host video.
+
+- **iOS Safari Handoff** — Browser-aware guidance for accessing supported Safari media features.
+
+![ViewCircle iOS Safari handoff](README-assets/viewcircle-safari.png)
+
+Installed iOS users can copy the session link and reopen it in Safari when browser-specific media functionality is required.
+
+- **Session Ended** — Clear notification displayed to guests after the host ends the live session.
+
+![ViewCircle session ended page](README-assets/viewcircle-session-ended.png)
+
+Guests are informed when the host closes the room and the live session is no longer available.
+
+---
+
+## 🛠️ Technologies Used
+
+### Frontend
+
+* HTML
+* CSS
+* JavaScript
+* React
+* Vite
+* Progressive Web App Technologies
+
+### Backend
+
+* Node.js
+* Express.js
+* REST API
+
+### Real-Time Communication
+
+* LiveKit Cloud
+* WebRTC
+* WebSocket Communication
+
+### Testing
+
+* Vitest
+* React Testing Library
+
+### Cloud & Deployment
+
+* Vercel — Frontend Deployment
+* Render — Backend Deployment
+
+### Development Tools & Workflow
+
+* Git and GitHub
+* AI-Assisted Development with Codex
+
+---
+
+## 🚀 Getting Started
+
+To run the project locally, follow these steps:
+
+### 1. Clone the Repository
 
 ```bash
-npm run typecheck
-npm run lint
-npm test
-npm run build
+git clone https://github.com/Blynx03/ViewCircle.git
+cd ViewCircle
 ```
 
-The automated suite covers room-code constraints/collisions, Private invitation entry, Public approval, capacity, lock/unlock, removal, Host authorization, ending, validation, LiveKit publish-source grants, explicit permission actions, media readiness, front/rear selection, secure-context guidance, core routes/forms, normalization, and control states. Real WebRTC hardware still needs manual testing.
-
-## Testing with phones and tablets
-
-Camera and microphone access requires HTTPS except on `localhost`. Do not disable browser security. For a practical local-device test, keep `npm run dev` running and expose the Vite server through one HTTPS tunnel; Vite proxies `/api` to the local backend:
+### 2. Install Backend Dependencies
 
 ```bash
-cloudflared tunnel --url http://localhost:5173
+cd backend
+npm install
 ```
 
-Open the generated `https://…trycloudflare.com` URL on both devices. Do not use the laptop's plain `http://192.168…` or `http://10.…` address for media testing. Alternatively, deploy a preview using the steps below.
+### 3. Configure the Backend Environment
 
-Manually test all four target classes: iPhone Safari, iPad Safari, Android phone Chrome, and Android tablet Chrome.
+Add the required LiveKit credentials and configuration values to the backend environment file. Use the variable names expected by the project and its environment example file, if provided.
 
-- Host separate camera/microphone prompts, readiness updates, front/rear camera, Flip, camera off/on, mic off/on, background/foreground, Wi-Fi-to-cellular recovery, and a session up to the configured expiration
-- Previously denied camera/microphone guidance and successful **Try Again** after changing site settings
-- Guest muted entry without a permission prompt, first permission request from **Turn Mic On**, Sound toggle, autoplay recovery, wired/Bluetooth route changes, lock/full room/removal
-- Portrait/landscape responsive fallback, landscape overlays, safe areas, installation, and clean End Session propagation
+Keep private LiveKit credentials on the backend and do not commit environment files containing secrets.
 
-Layout follows physical orientation. No Rotate or Fullscreen control is exposed and the app does not override OS rotation lock.
+### 4. Start the Backend Development Server
 
-## Deployment
+```bash
+npm run dev
+```
 
-1. Create a LiveKit Cloud project (free Build tier) and keep egress/recording disabled.
-2. Deploy the backend with `render.yaml` on Render or an equivalent Node host. Add `CLIENT_URL`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. Keep one backend instance while using the in-memory store.
-3. Deploy `frontend/` to Vercel. Replace `YOUR-BACKEND.example.com` in `frontend/vercel.json` so `/api` stays same-origin through the rewrite. Update backend `CLIENT_URL` to the exact Vercel production origin. The same-origin API path is important for the secure Host cookie.
-4. Use HTTPS/WSS in production. Test cookies and CORS from the final custom domains.
+### 5. Install Frontend Dependencies
 
-For multiple API instances or restart-resistant rooms, implement the existing `SessionStore` interface using Supabase PostgreSQL or Redis with transactional capacity admission. Do that before scaling horizontally. LiveKit can later move from Cloud to self-hosting by changing the three backend environment values.
+Open another terminal in the project root:
 
-Free tiers can change and LiveKit usage is participant-minute based. Sessions have a server-authoritative three-hour lifetime from room creation and does not enable automatic paid upgrades or resource-heavy recording features.
+```bash
+cd frontend
+npm install
+```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the security and lifecycle design.
+### 6. Configure the Frontend Environment
 
-### Background use, PiP, and orientation compatibility
+Add the backend API URL to the frontend environment file using the variable name expected by the project.
 
-ViewCircle keeps its LiveKit room and audio enabled when backgrounded, respecting your Mic and Sound selections. Background microphone, playback, and camera availability depend on the browser, OS, interruptions, and power policy. **iPhone/iPad Safari and installed iOS PWAs may suspend capture, playback, or the page when another app is active or the screen locks. Installing the PWA does not grant native background privileges.** A killed/reloaded page cannot preserve an in-memory Host capture session. Foreground recovery is best-effort and may require tapping the audio prompt or granting media permission again.
+### 7. Start the Frontend Development Server
 
-Guest layout follows physical orientation: portrait keeps separate header/video/control rows; landscape fills the viewport with video beneath translucent status and control overlays. A passive portrait tip may appear briefly once per session on touch devices. There are no Rotate or Fullscreen controls. Video uses `object-fit: contain`.
+```bash
+npm run dev
+```
 
-In normal browsers, Picture in Picture is offered when Host video is available and the video element supports the standard API or Safari's presentation API. Installed iOS Home Screen mode instead offers a Safari multitasking action. This implementation uses native video PiP (Document PiP is optional and is not used). Availability for live streams varies; a rejected request displays a simple fallback message. Native controls determine placement, resizing, and returning to the page. No arbitrary overlays or background permissions are added. See [MDN's PiP API reference](https://developer.mozilla.org/en-US/docs/Web/API/Picture-in-Picture_API), [Apple's Safari PiP guidance](https://developer.apple.com/documentation/webkitjs/adding_picture_in_picture_to_your_safari_media_controls), and [WebKit's capture behavior](https://webkit.org/blog/7763/a-closer-look-into-webrtc/).
+Open the local URL displayed in the frontend terminal.
 
-Without PiP, a background Guest unsubscribes from Host video while audio stays connected; foregrounding resubscribes. With PiP active, video remains subscribed. Explicit subscription control replaces LiveKit's visibility-based adaptive stream behavior so it cannot independently suspend PiP video. This reduces background video bandwidth; **it does not eliminate LiveKit participant-minute usage**.
+---
 
-Session status is checked on foreground/recovery and every 30 seconds while visible. LiveKit handles temporary transport reconnects; after a full disconnection the app checks session status before attempting to connect with the existing credentials and retained tracks. Expired credentials, revoked permissions, OS termination, or loss of the backend's existing in-memory session store can prevent recovery. Use Leave or End Session for a definitive exit; pagehide is deliberately not treated as Leave (it can also indicate suspension or browser navigation caching).
+## 🔗 Project Links
 
-Before production deployment, configure the backend Owner credentials and VAPID settings described in [owner-access.md](docs/owner-access.md). Preserve the same-origin API proxy. Deploy backend before frontend in a coordinated maintenance window; existing in-memory sessions reset on backend restart.
-
-
-### iOS Home Screen versus Safari: device-tested distinction
-
-A user-run A/B test with a laptop Host and an iPhone Guest verified PiP and two-way background audio in normal Safari, with the Guest mic still on after returning. The same session opened from the iPhone Home Screen had unavailable PiP and unreliable background media. These are observations for that device/setup, not a guarantee for every iOS version or interruption. Installed iOS Guest capture is not automatically reacquired on visibility changes; explicit Mic actions remain available. Normal Safari recovery is preserved.
-
-The centralized environment check combines `(display-mode: standalone)` with WebKit's `navigator.standalone`, restricted to iPhone/iPad/iPod identities or iPadOS's Mac identity with multi-touch. It does not label normal Safari, desktop Mac web apps, or Android PWAs as installed iOS. References: [Apple standalone detection](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html) and [display-mode detection](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/%40media/display-mode).
-
-Installed iOS Guests see a **Safari** compass action instead of PiP. It opens “Continue in Safari” instructions and **Copy & Continue**. No reliable direct launch/credential handoff is assumed: links can be handled within a web app or Safari View Controller ([Apple's web app behavior](https://developer.apple.com/videos/play/wwdc2023/10120/)). Guests copy the link, Leave, manually open Safari, and paste it to rejoin. The public room code is preserved; the display name is optionally prefilled from a URL fragment. No token, identity, Host credential, or PIN is transferred. The name is visible in the copied link. Safari still uses the normal Public approval or Private code, capacity, and session-lock checks; a locked session must be unlocked by its Host before rejoining. Copying alone never leaves or changes microphone state. Clipboard denial falls back to a selectable link.
-
-Host and Guest share 64px-wide, minimum 60px-high icon-above-label controls with responsive wrapping and safe-area padding. Mic/Sound have explicit active states, and destructive Leave/End actions have extra separation. See [the device test plan](docs/ios-safari-and-controls-testing.md).
-
-## Owner-controlled Host access
-
-ViewCircle requires Owner login or temporary Owner-approved Host access to create a session. The Host/Guest landing page and Guest joining are public; Guests still pass Private room-code or Public approval, lock and capacity checks. Existing-room Host controls require their separate room-specific Host authority. Start at `/owner` to manage access requests and enable iPhone Home Screen Web Push. Configure backend-only Owner credentials before production startup; the frontend continues using the existing same-origin `/api` proxy.
-
-See [Owner setup, environment variables, key generation, security and limitations](docs/owner-access.md) and the [real-device acceptance procedure](docs/ios-safari-and-controls-testing.md). In-memory authorization and notification registrations reset on backend restart. No normal user accounts are introduced.
-
-See [production hardening and validation](docs/production-hardening.md) for lifecycle rules, operational controls, limitations, and the physical-device acceptance plan.
+* [GitHub Repository](https://github.com/Blynx03/ViewCircle)
